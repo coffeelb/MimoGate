@@ -701,7 +701,7 @@ wan_online() {
 start_service() {
 	start_failed=1
 	rm -f "$BOOT_WAN_PENDING"
-	prepare_log || return 1
+	prepare_log && : > "$LOG_FILE" && : > "$MIHOMO_LOG_FILE" || return 1
 	if [ ! -x "$CORE" ] || [ ! -s "$CONFIG" ]; then
 		printf '%s\n' "Missing Mihomo executable or configuration at $CONFIG." >> "$LOG_FILE"
 		return 1
@@ -870,6 +870,10 @@ stop_service() {
 		fi
 	fi
 	restore_dnsmasq
+	if [ "${action:-}" = stop ]; then
+		: > "$LOG_FILE" 2>/dev/null
+		: > "$MIHOMO_LOG_FILE" 2>/dev/null
+	fi
 }
 
 restore_dnsmasq() {
