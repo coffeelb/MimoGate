@@ -163,17 +163,7 @@ build_cn_nft() {
 }
 
 validate_cn_nft() {
-	{
-		cat <<-EOF
-			table inet mimogate {
-				set cn4 { type ipv4_addr; flags interval; auto-merge; }
-				set cn6 { type ipv6_addr; flags interval; auto-merge; }
-			}
-			flush set inet mimogate cn4
-			flush set inet mimogate cn6
-		EOF
-		cat "$1"
-	} | nft -c -f - >/dev/null 2>&1
+	sed '1s/^table inet mimogate /table inet mimogate_check /' "$1" | nft -c -f - >/dev/null 2>&1
 }
 
 update_cn() (
