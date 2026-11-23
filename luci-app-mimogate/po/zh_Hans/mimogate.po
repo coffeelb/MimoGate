@@ -351,3 +351,9 @@ msgstr "启用 Mihomo 与防火墙的 IPv6 流量接管；关闭后 IPv6 流量�
 
 msgid "Checking..."
 msgstr "检测中..."
+
+msgid "Applying configuration changes"
+msgstr "正在应用配置更改"
+
+msgid "Waiting for changes to be applied..."
+msgstr "正在等待配置被应用..."

@@ -29,7 +29,7 @@ esac
 START=99
 STOP=10
 USE_PROCD=1
-EXTRA_COMMANDS="clear_log clear_mihomo_log apply_ports save_acl save_settings stop_routing wan_online update_cn"
+EXTRA_COMMANDS="clear_log clear_mihomo_log apply_ports save_acl save_settings dnsmasq_up stop_routing wan_online update_cn"
 
 CORE=/usr/bin/mihomo
 WORKDIR=/etc/mimogate
@@ -441,6 +441,11 @@ clear_routing() {
 	return 0
 }
 
+dnsmasq_up() {
+	[ -n "${1:-}" ] && [ "$(cat "$ROUTING_READY" 2>/dev/null)" = "$1" ] || return 0
+	start_dnsmasq
+}
+
 mihomo_post_up() {
 	# A busy TUN can still have the expected name but belong to an old core.
 	if ! grep -Eq "^iff:[[:space:]]+$TUN_DEVICE$" /proc/"$1"/fdinfo/* 2>/dev/null; then
@@ -448,10 +453,7 @@ mihomo_post_up() {
 		return 1
 	fi
 	start_routing "$1" || return 1
-	(
-		[ "$(cat "$ROUTING_READY" 2>/dev/null)" = "$1" ] || exit 0
-		start_dnsmasq
-	) </dev/null >/dev/null 2>&1 &
+	/etc/init.d/mimogate dnsmasq_up "$1" </dev/null >/dev/null 2>&1 &
 }
 
 start_routing() {
@@ -834,10 +836,15 @@ start_dnsmasq() {
 		printf '%s\n' "$dropin" > "$DNSMASQ_STATE" &&
 		mv -f "$temporary" "$dropin"; then
 		log_dnsmasq "Validating and restarting dnsmasq (PID $$)."
-		if /usr/sbin/dnsmasq --test -C "$config" &&
-			"$DNSMASQ_INIT" restart && procd_running dnsmasq "$section"; then
-			log_dnsmasq "dnsmasq forwarding enabled on 127.0.0.1:$DNS_PORT."
-			return 0
+		if /usr/sbin/dnsmasq --test -C "$config" && "$DNSMASQ_INIT" restart; then
+			local dns_attempt
+			for dns_attempt in 1 2 3 4 5; do
+				if procd_running dnsmasq "$section"; then
+					log_dnsmasq "dnsmasq forwarding enabled on 127.0.0.1:$DNS_PORT."
+					return 0
+				fi
+				[ "$dns_attempt" = 5 ] || sleep 1
+			done
 		fi
 		error='Could not enable dnsmasq forwarding. Restoring the original upstream.'
 	else

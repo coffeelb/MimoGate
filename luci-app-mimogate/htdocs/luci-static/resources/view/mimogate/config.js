@@ -103,38 +103,49 @@ return view.extend({
 		});
 
 		const save = (restart) => guarded(async () => {
-			const text = editorText(editor.value);
-			const res = await saveConfig(text);
-
-			if (!res?.ok) {
-				const prefix = res?.invalid ? _('Not saved: the configuration is invalid.') + '\n\n' : '';
-				showResult(false, prefix + errorText(res));
-				return;
+			if (restart) {
+				ui.showModal(_('Applying configuration changes'), [
+					E('p', { 'class': 'spinning' }, _('Waiting for changes to be applied...'))
+				]);
 			}
-
-			editor.value = text;
-			if (!restart) {
-				showResult(true, _('Saved. Restart the service to apply the changes.'));
-				return;
-			}
-
 			try {
-				const st = await getStatus();
-				if (!st?.ok)
-					throw new Error(errorText(st));
-				if (!st.running) {
-					showResult(true, _('Saved. Enable the proxy switch on the Settings page to start the service.'));
+				const text = editorText(editor.value);
+				const res = await saveConfig(text);
+
+				if (!res?.ok) {
+					const prefix = res?.invalid ? _('Not saved: the configuration is invalid.') + '\n\n' : '';
+					showResult(false, prefix + errorText(res));
 					return;
 				}
-				const result = await serviceAction('restart');
-				if (!result?.ok)
-					throw new Error(errorText(result));
-			}
-			catch (e) {
-				throw new Error(_('Saved, but the service failed to restart:') + '\n' + e.message);
-			}
 
-			showResult(true, _('Saved. The service was restarted.'));
+				editor.value = text;
+				if (!restart) {
+					showResult(true, _('Saved. Restart the service to apply the changes.'));
+					return;
+				}
+
+				try {
+					const st = await getStatus();
+					if (!st?.ok)
+						throw new Error(errorText(st));
+					if (!st.running) {
+						showResult(true, _('Saved. Enable the proxy switch on the Settings page to start the service.'));
+						return;
+					}
+					const result = await serviceAction('restart');
+					if (!result?.ok)
+						throw new Error(errorText(result));
+				}
+				catch (e) {
+					throw new Error(_('Saved, but the service failed to restart:') + '\n' + e.message);
+				}
+
+				showResult(true, _('Saved. The service was restarted.'));
+			}
+			finally {
+				if (restart)
+					ui.hideModal();
+			}
 		});
 
 		return E('div', { 'class': 'cbi-map' }, [

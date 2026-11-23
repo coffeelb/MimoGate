@@ -310,6 +310,11 @@ return view.extend({
 
 			busy = true;
 			syncFormState();
+			if (apply) {
+				ui.showModal(_('Applying configuration changes'), [
+					E('p', { 'class': 'spinning' }, _('Waiting for changes to be applied...'))
+				]);
+			}
 			try {
 				const portRes = await applyPorts(portsInput.value);
 				if (!portRes?.ok)
@@ -366,6 +371,8 @@ return view.extend({
 				ui.addNotification(null, E('p', e.message), 'danger');
 			}
 			finally {
+				if (apply)
+					ui.hideModal();
 				busy = false;
 				syncFormState();
 			}
