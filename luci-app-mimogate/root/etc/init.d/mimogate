@@ -50,8 +50,8 @@ ROUTING_READY=/var/run/mimogate-routing.pid
 BOOT_WAN_PENDING=/var/run/mimogate-boot-wan
 ROUTING_UP='. /etc/init.d/mimogate; mihomo_post_up "$PPID"'
 ROUTING_DOWN='. /etc/init.d/mimogate; stop_routing "$PPID"'
-CN_CACHE="$WORKDIR/cn.list"
-CN_DEFAULT=/usr/share/mimogate/cn.list
+CN_CACHE="$WORKDIR/cn.nft"
+CN_DEFAULT=/usr/share/mimogate/cn.nft
 CN_URL=https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.list
 
 prepare_log() (
@@ -130,49 +130,65 @@ update_port_rules() {
 	EOF
 }
 
-prepare_cn_elements() {
-	awk -v dir="$2" '
-		/^[0-9.]+\/[0-9]+$/ { family = 4 }
-		/^[0-9a-fA-F:]+\/[0-9]+$/ && /:/ { family = 6 }
-		{
-			if (!family)
-				exit 1
-			printf "%s%s", (count[family]++ ? ", " : ""), $0 > (dir "/" family)
-			family = 0
+build_cn_nft() {
+	awk '
+		{ sub(/\r$/, "") }
+		/^[0-9.]+\/[0-9]+$/ { v4[++n4] = $0; next }
+		/^[0-9a-fA-F:]+\/[0-9]+$/ && /:/ { v6[++n6] = $0; next }
+		{ exit 1 }
+		END {
+			if (!n4 || !n6) exit 1
+			print "table inet mimogate {"
+			print "\tset cn4 {"
+			print "\t\ttype ipv4_addr"
+			print "\t\tflags interval"
+			print "\t\tauto-merge"
+			print "\t\telements = {"
+			for (i = 1; i <= n4; i++)
+				printf "\t\t\t%s%s\n", v4[i], (i < n4 ? "," : "")
+			print "\t\t}"
+			print "\t}"
+			print "\tset cn6 {"
+			print "\t\ttype ipv6_addr"
+			print "\t\tflags interval"
+			print "\t\tauto-merge"
+			print "\t\telements = {"
+			for (i = 1; i <= n6; i++)
+				printf "\t\t\t%s%s\n", v6[i], (i < n6 ? "," : "")
+			print "\t\t}"
+			print "\t}"
+			print "}"
 		}
-		END { if (!count[4] || !count[6]) exit 1 }
-	' "$1"
+	' "$1" > "$2"
 }
 
-validate_cn_list() (
-	local staged
-	staged="$(mktemp -d /tmp/mimogate-cn-check.XXXXXX)" || return 1
-	trap 'rm -f "$staged/4" "$staged/6"; rmdir "$staged" 2>/dev/null' EXIT
-	prepare_cn_elements "$1" "$staged" || return 1
+validate_cn_nft() {
 	{
-		printf 'table inet mimogate_validate {\n'
-		printf '\tset cn4 { type ipv4_addr; flags interval; auto-merge; elements = { '
-		cat "$staged/4"
-		printf ' }; }\n'
-		printf '\tset cn6 { type ipv6_addr; flags interval; auto-merge; elements = { '
-		cat "$staged/6"
-		printf ' }; }\n'
-		printf '}\n'
+		cat <<-EOF
+			table inet mimogate {
+				set cn4 { type ipv4_addr; flags interval; auto-merge; }
+				set cn6 { type ipv6_addr; flags interval; auto-merge; }
+			}
+			flush set inet mimogate cn4
+			flush set inet mimogate cn6
+		EOF
+		cat "$1"
 	} | nft -c -f - >/dev/null 2>&1
-)
+}
 
 update_cn() (
 	umask 077
-	local staged
+	local raw staged
 	mkdir -p "$WORKDIR" || return 1
-	staged="$(mktemp "$WORKDIR/.cn.XXXXXX")" || return 1
-	trap 'rm -f "$staged"' EXIT
-	if ! uclient-fetch -q -T 15 -O "$staged" "$CN_URL"; then
+	raw="$(mktemp "$WORKDIR/.cn-raw.XXXXXX")" || return 1
+	staged="$(mktemp "$WORKDIR/.cn.XXXXXX")" || { rm -f "$raw"; return 1; }
+	trap 'rm -f "$raw" "$staged"' EXIT
+	if ! uclient-fetch -q -T 15 -O "$raw" "$CN_URL"; then
 		log_ports 'Could not download mainland China addresses.'
 		echo 'Could not download mainland China addresses.' >&2
 		return 1
 	fi
-	if ! validate_cn_list "$staged"; then
+	if ! build_cn_nft "$raw" "$staged" || ! validate_cn_nft "$staged"; then
 		log_ports 'Downloaded mainland China address list is invalid.'
 		echo 'Downloaded mainland China address list is invalid.' >&2
 		return 1
@@ -228,7 +244,7 @@ start_routing() {
 }
 
 install_routing() (
-	local ports_file="$PORTS_CONFIG" ports lan family families=-4 ipv6_bypass= cn_staged cn_source=
+	local ports_file="$PORTS_CONFIG" ports lan family families=-4 ipv6_bypass= cn_file= cn_source=
 	log_ports "Waiting for routing lock (PID $$)."
 	routing_lock || return 1
 	log_ports "Routing lock acquired (PID $$)."
@@ -244,17 +260,15 @@ install_routing() (
 	else
 		ipv6_bypass='meta nfproto ipv6 return'
 	fi
-	cn_staged="$(mktemp -d /tmp/mimogate-cn.XXXXXX)" || return 1
-	trap 'rm -f "$cn_staged/4" "$cn_staged/6"; rmdir "$cn_staged" 2>/dev/null' EXIT
-	if [ -s "$CN_CACHE" ] && prepare_cn_elements "$CN_CACHE" "$cn_staged"; then
+	if [ -s "$CN_CACHE" ]; then
+		cn_file="$CN_CACHE"
 		cn_source=cached
-	elif rm -f "$cn_staged/4" "$cn_staged/6" && prepare_cn_elements "$CN_DEFAULT" "$cn_staged"; then
+	elif [ -s "$CN_DEFAULT" ]; then
+		cn_file="$CN_DEFAULT"
 		cn_source=bundled
-	else
-		rm -f "$cn_staged/4" "$cn_staged/6"
 	fi
 	clear_routing
-	trap 'rm -f "$cn_staged/4" "$cn_staged/6"; rmdir "$cn_staged" 2>/dev/null; clear_routing' EXIT
+	trap 'clear_routing' EXIT
 	for family in $families; do
 		ip "$family" route add default dev "$TUN_DEVICE" table "$ROUTE_TABLE" &&
 			ip "$family" rule add pref "$ROUTE_TABLE" fwmark "$TUN_MARK/$TUN_MARK" lookup "$ROUTE_TABLE" || return 1
@@ -265,19 +279,8 @@ install_routing() (
 		cat <<-EOF
 			table inet mimogate {
 				set ports { type inet_service; elements = { $ports }; }
-		EOF
-		if [ -n "$cn_source" ]; then
-			printf '\t\tset cn4 { type ipv4_addr; flags interval; auto-merge; elements = { '
-			cat "$cn_staged/4"
-			printf ' }; }\n'
-			printf '\t\tset cn6 { type ipv6_addr; flags interval; auto-merge; elements = { '
-			cat "$cn_staged/6"
-			printf ' }; }\n'
-		else
-			printf '\t\tset cn4 { type ipv4_addr; flags interval; auto-merge; }\n'
-			printf '\t\tset cn6 { type ipv6_addr; flags interval; auto-merge; }\n'
-		fi
-		cat <<-EOF
+				set cn4 { type ipv4_addr; flags interval; auto-merge; }
+				set cn6 { type ipv6_addr; flags interval; auto-merge; }
 				chain bypass {
 					$ipv6_bypass
 					ct direction reply return
@@ -301,11 +304,10 @@ install_routing() (
 				}
 			}
 		EOF
+		[ -z "$cn_file" ] || printf 'include "%s"\n' "$cn_file"
 	} | nft -f - || return 1
 	[ -z "${1:-}" ] || printf '%s\n' "$1" > "$ROUTING_READY" || return 1
 	trap - EXIT
-	rm -f "$cn_staged/4" "$cn_staged/6"
-	rmdir "$cn_staged" 2>/dev/null
 	log_ports "Loaded LAN interception ports: $ports."
 	case "$cn_source" in
 		cached) log_ports 'Loaded cached mainland China address sets.' ;;
