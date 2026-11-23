@@ -301,8 +301,8 @@ msgstr "每 %d 秒刷新一次。"
 msgid "Invalid test target."
 msgstr "无效的测试目标。"
 
-msgid "Enable"
-msgstr "启用"
+msgid "Proxy switch"
+msgstr "代理开关"
 
 msgid "Enable MimoGate and start on boot. Uncheck and click Save & Apply to stop the service."
 msgstr "启用 MimoGate 并随开机自启。取消勾选后点击「保存并应用」将停止服务。"

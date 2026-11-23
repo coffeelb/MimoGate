@@ -408,7 +408,7 @@ return view.extend({
 		}, _('Reset'));
 
 		const generalPane = E('div', { 'class': 'cbi-tabcontainer' }, [
-			row(_('Enable'), [
+			row(_('Proxy switch'), [
 				enableBox,
 				E('div', { 'class': 'cbi-value-description' },
 					_('Enable MimoGate and start on boot. Uncheck and click Save & Apply to stop the service.'))
