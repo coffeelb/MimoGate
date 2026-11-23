@@ -33,7 +33,7 @@ function editorText(value) {
 }
 
 function errorText(result) {
-	return [ result?.message || _('Request failed.'), result?.detail ].filter(Boolean).join('\n');
+	return [ result?.message ? _(result.message) : _('Request failed.'), result?.detail ].filter(Boolean).join('\n');
 }
 
 return view.extend({

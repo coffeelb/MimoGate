@@ -23,7 +23,7 @@ function failure(message, detail) {
 // before exposing configuration secrets or invoking the core as root.
 function rootOnly(handler) {
 	return function(request) {
-		const denied = failure('此操作需要 OpenWrt root 管理员会话。');
+		const denied = failure('This operation requires an OpenWrt root administrator session.');
 		const sid = request.args.ubus_rpc_session;
 
 		if (type(sid) != 'string' || !match(sid, /^[0-9a-f]{32}$/))
@@ -52,11 +52,11 @@ function validateConfig(source, runtime, done) {
 		'mimogate-config', source, runtime
 	], result => {
 		if (!result)
-			return done(failure('无法执行 Mihomo 校验，或校验超时。'));
+			return done(failure('Could not run Mihomo validation, or validation timed out.'));
 
 		if (result.code != 0 || index(result.stdout ?? '', ' test is successful') < 0) {
 			const log = substr((result.stderr ?? '') + (result.stdout ?? ''), 0, 4096);
-			const error = failure('Mihomo 配置校验失败。', replace(log, /\x1b\[[0-9;]*m/g, ''));
+			const error = failure('Mihomo configuration validation failed.', replace(log, /\x1b\[[0-9;]*m/g, ''));
 			error.invalid = true;
 			return done(error);
 		}
@@ -68,7 +68,7 @@ function validateConfig(source, runtime, done) {
 function status(_, reply) {
 	if (!bus.defer('service', 'list', { name: 'mimogate' }, (code, state) => {
 		if (code != 0)
-			return reply(failure('无法读取 procd 服务状态。'));
+			return reply(failure('Could not read procd service status.'));
 
 		const instance = state?.mimogate?.instances?.main;
 		const cnStat = fs.stat(cnCache);
@@ -82,7 +82,7 @@ function status(_, reply) {
 			cn_mtime: cnStat?.size ? cnStat.mtime : null
 		});
 	}))
-		reply(failure('无法读取 procd 服务状态。'));
+		reply(failure('Could not read procd service status.'));
 }
 
 function version(_, reply) {
@@ -92,7 +92,7 @@ function version(_, reply) {
 	exec(core, [ '-v' ], result => {
 		reply(result?.code == 0
 			? { ok: true, version: trim(result.stdout ?? '') }
-			: failure('无法读取 Mihomo 版本。'));
+			: failure('Could not read Mihomo version.'));
 	});
 }
 
@@ -100,7 +100,7 @@ function bootStatus(_, reply) {
 	exec(init, [ 'enabled' ], result => {
 		reply(result?.code == 0 || result?.code == 1
 			? { ok: true, enabled: result.code == 0 }
-			: failure('无法读取开机自启状态。'));
+			: failure('Could not read boot status.'));
 	});
 }
 
@@ -109,9 +109,9 @@ function readConfig(args, reply) {
 	const content = fs.readfile(saved ? config : template, maxSize + 1);
 
 	if (content == null)
-		return reply(failure('无法读取配置文件。'));
+		return reply(failure('Could not read the configuration file.'));
 	if (length(content) > maxSize)
-		return reply(failure('配置文件超过网页编辑器的 48 KiB 上限。'));
+		return reply(failure('The configuration file exceeds the 48 KiB web editor limit.'));
 
 	reply({ ok: true, content, saved });
 }
@@ -119,24 +119,24 @@ function readConfig(args, reply) {
 function validateInput(args, reply, save) {
 	const content = args.content;
 	if (saving)
-		return reply(failure('有一份配置正在校验，请稍后再试。'));
+		return reply(failure('Another configuration check is already in progress. Please try again shortly.'));
 	if (type(content) != 'string' || !length(trim(content)) || index(content, chr(0)) >= 0)
-		return reply(failure('请输入有效的 YAML 文本。'));
+		return reply(failure('Enter valid YAML text.'));
 	if (length(content) > maxSize)
-		return reply(failure('配置文件超过网页编辑器的 48 KiB 上限。'));
+		return reply(failure('The configuration file exceeds the 48 KiB web editor limit.'));
 	if (!fs.access(core, 'x'))
-		return reply(failure('未找到 Mihomo 内核。'));
+		return reply(failure('Mihomo core was not found.'));
 
 	if (!fs.stat(directory) && !fs.mkdir(directory, 0o700) && !fs.stat(directory))
-		return reply(failure('无法创建配置目录。'));
+		return reply(failure('Could not create the configuration directory.'));
 
 	const temporary = fs.popen('/bin/mktemp -d /etc/mimogate/.stage.XXXXXX');
 	if (!temporary)
-		return reply(failure('无法创建临时目录。'));
+		return reply(failure('Could not create a temporary directory.'));
 
 	const staging = trim(temporary.read('line') ?? '');
 	if (temporary.close() != 0 || !length(staging))
-		return reply(failure('无法创建临时目录。'));
+		return reply(failure('Could not create a temporary directory.'));
 
 	const candidate = staging + '/config.yaml';
 	const runtime = staging + '/runtime.yaml';
@@ -149,7 +149,7 @@ function validateInput(args, reply, save) {
 	};
 
 	if (fs.writefile(candidate, content) != length(content) || !fs.chmod(candidate, 0o600))
-		return finish(failure('无法写入临时配置文件。'));
+		return finish(failure('Could not write the temporary configuration file.'));
 
 	saving = true;
 	validateConfig(candidate, runtime, error => {
@@ -157,7 +157,7 @@ function validateInput(args, reply, save) {
 			return finish(error);
 
 		if (save && !fs.rename(candidate, config))
-			return finish(failure('无法保存配置文件。'));
+			return finish(failure('Could not save the configuration file.'));
 
 		finish({ ok: true });
 	});
@@ -167,7 +167,7 @@ function readPorts(_, reply) {
 	const saved = fs.stat(portsFile) != null;
 	const ports = trim(fs.readfile(saved ? portsFile : defaultPortsFile, 4097) ?? '');
 	if (!ports || length(ports) > 4096)
-		return reply(failure('无法读取已保存的接管端口。'));
+		return reply(failure('Could not read the saved interception ports.'));
 
 	reply({ ok: true, ports, saved });
 }
@@ -175,11 +175,11 @@ function readPorts(_, reply) {
 function applyPorts(args, reply) {
 	const ports = args.ports;
 	if (type(ports) != 'string' || length(ports) > 4096 || index(ports, chr(0)) >= 0)
-		return reply(failure('接管端口输入无效或过长。'));
+		return reply(failure('Interception port input is invalid or too long.'));
 
 	exec(init, [ 'apply_ports', ports ], result => {
 		if (result?.code != 0)
-			return reply(failure('无法应用防火墙端口规则。', trim(result?.stderr ?? '')));
+			return reply(failure('Could not apply firewall port rules.', trim(result?.stderr ?? '')));
 		const lines = split(trim(result.stdout ?? ''), '\n', 2);
 		const response = { ok: true, ports: lines[0] };
 		if (lines[1] == 'deferred')
@@ -191,7 +191,7 @@ function applyPorts(args, reply) {
 function updateCn(_, reply) {
 	exec(init, [ 'update_cn' ], result => {
 		if (result?.code != 0)
-			return reply(failure('无法更新中国大陆 IP 列表。', trim(result?.stderr ?? '')));
+			return reply(failure('Could not update the mainland China IP list.', trim(result?.stderr ?? '')));
 		reply({ ok: true, unchanged: trim(result.stdout ?? '') == 'unchanged' });
 	});
 }
@@ -199,18 +199,18 @@ function updateCn(_, reply) {
 function serviceAction(args, reply) {
 	const action = args.action;
 	if (index([ 'start', 'stop', 'restart', 'enable', 'disable', 'clear_log' ], action) < 0)
-		return reply(failure('无效的服务操作。'));
+		return reply(failure('Invalid service action.'));
 
 	const run = () => exec(init, [ action ], result => {
 		const detail = trim((result?.stderr ?? '') + (result?.stdout ?? ''));
-		reply(result?.code == 0 ? { ok: true } : failure('服务操作失败。', substr(detail, 0, 4096)));
+		reply(result?.code == 0 ? { ok: true } : failure('Service action failed.', substr(detail, 0, 4096)));
 	});
 	if (action != 'start' && action != 'restart')
 		return run();
 	if (!fs.access(core, 'x'))
-		return reply(failure('未找到 Mihomo 内核。'));
+		return reply(failure('Mihomo core was not found.'));
 	if (!fs.stat(config)?.size)
-		return reply(failure('请先在配置文件页保存 YAML。'));
+		return reply(failure('Save a YAML configuration on the Configuration page first.'));
 
 	run();
 }

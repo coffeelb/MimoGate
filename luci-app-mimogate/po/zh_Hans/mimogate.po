@@ -109,9 +109,6 @@ msgstr "防火墙端口绕过"
 msgid "Intercepted ports"
 msgstr "接管端口"
 
-msgid "Not applied yet."
-msgstr "尚未应用。"
-
 msgid "Port bypass applied."
 msgstr "端口绕过已应用。"
 
@@ -150,3 +147,66 @@ msgstr "中国大陆 IP 列表已更新，重启 MimoGate 后生效。"
 
 msgid "Unable to update mainland China IP list."
 msgstr "无法更新中国大陆 IP 列表。"
+
+msgid "This operation requires an OpenWrt root administrator session."
+msgstr "此操作需要 OpenWrt root 管理员会话。"
+
+msgid "Could not run Mihomo validation, or validation timed out."
+msgstr "无法执行 Mihomo 校验，或校验超时。"
+
+msgid "Mihomo configuration validation failed."
+msgstr "Mihomo 配置校验失败。"
+
+msgid "Could not read procd service status."
+msgstr "无法读取 procd 服务状态。"
+
+msgid "Could not read Mihomo version."
+msgstr "无法读取 Mihomo 版本。"
+
+msgid "Could not read boot status."
+msgstr "无法读取开机自启状态。"
+
+msgid "Could not read the configuration file."
+msgstr "无法读取配置文件。"
+
+msgid "The configuration file exceeds the 48 KiB web editor limit."
+msgstr "配置文件超过网页编辑器的 48 KiB 上限。"
+
+msgid "Another configuration check is already in progress. Please try again shortly."
+msgstr "有一份配置正在校验，请稍后再试。"
+
+msgid "Enter valid YAML text."
+msgstr "请输入有效的 YAML 文本。"
+
+msgid "Mihomo core was not found."
+msgstr "未找到 Mihomo 内核。"
+
+msgid "Could not create the configuration directory."
+msgstr "无法创建配置目录。"
+
+msgid "Could not create a temporary directory."
+msgstr "无法创建临时目录。"
+
+msgid "Could not write the temporary configuration file."
+msgstr "无法写入临时配置文件。"
+
+msgid "Could not save the configuration file."
+msgstr "无法保存配置文件。"
+
+msgid "Could not read the saved interception ports."
+msgstr "无法读取已保存的接管端口。"
+
+msgid "Interception port input is invalid or too long."
+msgstr "接管端口输入无效或过长。"
+
+msgid "Could not apply firewall port rules."
+msgstr "无法应用防火墙端口规则。"
+
+msgid "Could not update the mainland China IP list."
+msgstr "无法更新中国大陆 IP 列表。"
+
+msgid "Invalid service action."
+msgstr "无效的服务操作。"
+
+msgid "Save a YAML configuration on the Configuration page first."
+msgstr "请先在配置文件页保存 YAML。"

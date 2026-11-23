@@ -9,7 +9,9 @@ a runtime copy with interface `mimogate0`, auto-route and auto-redirect
 disabled, and a mark for Mihomo's outbound sockets.
 
 The `proxy-ports` list selects LAN TCP/UDP ports. Router-originated TCP/UDP
-is also eligible for interception. Private and local destinations, inbound
+is also eligible for interception (DHCPv4/DHCPv6 client traffic is exempted;
+router-originated VPN clients such as WireGuard can set packet mark
+`0x20000000` to bypass MimoGate). Private and local destinations, inbound
 port forwards, and mainland China destinations are bypassed. The app uses
 route table and priority 10900, packet mark bits `0x40000000` and
 `0x20000000`, and firewall4's automatic includes. Reserve these values

@@ -90,6 +90,7 @@ prepare_runtime_config() (
 	umask 077
 	awk -v device="$TUN_DEVICE" -v mark="$CORE_MARK" '
 		BEGIN { print "x-mimogate-config: &mimogateConfig" }
+		NR == 1 { sub(/^\357\273\277/, "") }
 		{ sub(/\r$/, "") }
 		/^(---|[.][.][.]|%)/ { invalid = 1 }
 		/^tun:[ \t]*(#.*)?$/ {
@@ -105,6 +106,7 @@ prepare_runtime_config() (
 			print "routing-mark: " mark
 			print "tun:"
 			print "  <<: *mimogateTun"
+			print "  enable: true"
 			print "  device: " device
 			print "  auto-route: false"
 			print "  auto-redirect: false"
@@ -142,14 +144,22 @@ prepare_cn_elements() {
 	' "$1"
 }
 
-validate_cn_list() {
-	awk '
-		/^[0-9.]+\/[0-9]+$/ { count[4]++; next }
-		/^[0-9a-fA-F:]+\/[0-9]+$/ && /:/ { count[6]++; next }
-		{ exit 1 }
-		END { if (!count[4] || !count[6]) exit 1 }
-	' "$1"
-}
+validate_cn_list() (
+	local staged
+	staged="$(mktemp -d /tmp/mimogate-cn-check.XXXXXX)" || return 1
+	trap 'rm -f "$staged/4" "$staged/6"; rmdir "$staged" 2>/dev/null' EXIT
+	prepare_cn_elements "$1" "$staged" || return 1
+	{
+		printf 'table inet mimogate_validate {\n'
+		printf '\tset cn4 { type ipv4_addr; flags interval; auto-merge; elements = { '
+		cat "$staged/4"
+		printf ' }; }\n'
+		printf '\tset cn6 { type ipv6_addr; flags interval; auto-merge; elements = { '
+		cat "$staged/6"
+		printf ' }; }\n'
+		printf '}\n'
+	} | nft -c -f - >/dev/null 2>&1
+)
 
 update_cn() (
 	umask 077
@@ -286,7 +296,7 @@ install_routing() (
 				chain output {
 					type route hook output priority mangle; policy accept;
 					meta mark & $CORE_MARK != 0 return
-					udp dport 67 return
+					udp dport { 67, 547 } return
 					meta l4proto { tcp, udp } jump bypass
 				}
 			}
@@ -420,7 +430,7 @@ start_service() {
 		mimogate "$LOG_FILE" "$CORE" -d "$WORKDIR" -f "$RUNTIME_CONFIG" \
 		-post-up "$ROUTING_UP" -post-down "$ROUTING_DOWN"
 	procd_set_param respawn 3600 5 3
-	procd_set_param term_timeout 10
+	procd_set_param term_timeout 8
 	procd_close_instance
 
 	procd_open_instance log_maintenance
@@ -448,14 +458,14 @@ restart() {
 	log_ports "Waiting for previous Mihomo instance and $TUN_DEVICE to exit."
 
 	attempt=1
-	while [ "$attempt" -le 11 ]; do
+	while [ "$attempt" -le 9 ]; do
 		if { [ -z "$old_pid" ] || ! kill -0 "$old_pid" 2>/dev/null; } &&
 			! ip link show dev "$TUN_DEVICE" >/dev/null 2>&1; then
 			log_ports "Previous Mihomo instance released $TUN_DEVICE. Starting again."
 			start "$@"
 			return $?
 		fi
-		[ "$attempt" = 11 ] || sleep 1
+		[ "$attempt" = 9 ] || sleep 1
 		attempt=$((attempt + 1))
 	done
 	log_ports "Previous Mihomo instance did not release $TUN_DEVICE."
@@ -465,7 +475,7 @@ restart() {
 mihomo_dns_ready() {
 	local pid attempt
 	log_dnsmasq "Waiting for Mihomo DNS (PID $$)."
-	for attempt in 1 2 3 4 5; do
+	for attempt in 1 2 3 4; do
 		pid="$(main_pid)"
 		if [ -n "$pid" ] && [ "$(cat "$ROUTING_READY" 2>/dev/null)" = "$pid" ] &&
 			netstat -lnup 2>/dev/null | awk -v pid="$pid" -v port="$DNS_PORT" '
@@ -475,7 +485,7 @@ mihomo_dns_ready() {
 			log_dnsmasq "Mihomo DNS listener ready on attempt $attempt (Mihomo PID $pid)."
 			return 0
 		fi
-		[ "$attempt" = 5 ] || sleep 1
+		[ "$attempt" = 4 ] || sleep 1
 	done
 	return 1
 }
@@ -503,13 +513,13 @@ service_started() {
 	local pid attempt
 	log_dnsmasq "Service startup callback entered (action ${action:-unknown}, PID $$)."
 	attempt=1
-	while [ "$attempt" -le 11 ]; do
+	while [ "$attempt" -le 9 ]; do
 		pid="$(main_pid)"
 		if [ -n "$pid" ] && [ "$(cat "$ROUTING_READY" 2>/dev/null)" = "$pid" ]; then
 			start_dnsmasq
 			return $?
 		fi
-		[ "$attempt" = 11 ] || sleep 1
+		[ "$attempt" = 9 ] || sleep 1
 		attempt=$((attempt + 1))
 	done
 	log_ports 'Mihomo did not finish installing the interception rules.'
@@ -542,6 +552,7 @@ start_dnsmasq() {
 		error="Skipping DNS forwarding: Mihomo has no local DNS listener on port $DNS_PORT."
 	elif temporary="$(mktemp "$dir/.mimogate.XXXXXX")" &&
 		printf '%s\n' no-resolv "server=127.0.0.1#$DNS_PORT" > "$temporary" &&
+		chmod 644 "$temporary" &&
 		printf '%s\n' "$dropin" > "$DNSMASQ_STATE" &&
 		mv -f "$temporary" "$dropin"; then
 		log_dnsmasq "Validating and restarting dnsmasq (PID $$)."

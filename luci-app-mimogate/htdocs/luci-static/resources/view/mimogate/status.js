@@ -38,7 +38,7 @@ async function runInit(action) {
 	const res = await serviceAction(action);
 
 	if (!res?.ok)
-		throw new Error([ res?.message || _('Service action failed.'), res?.detail ].filter(Boolean).join('\n'));
+		throw new Error([ res?.message ? _(res.message) : _('Service action failed.'), res?.detail ].filter(Boolean).join('\n'));
 }
 
 async function getLog() {
@@ -194,7 +194,7 @@ return view.extend({
 				const res = await applyPorts(portsInput.value).catch(error => ({ message: error.message }));
 				portsInput.disabled = false;
 				if (!res?.ok) {
-					ui.addNotification(null, E('p', [ res?.message || _('Unable to apply port bypass.'), res?.detail ]
+					ui.addNotification(null, E('p', [ res?.message ? _(res.message) : _('Unable to apply port bypass.'), res?.detail ]
 						.filter(Boolean).join('\n')), 'danger');
 					return;
 				}
@@ -214,7 +214,7 @@ return view.extend({
 				try {
 					const res = await updateCn();
 					if (!res?.ok)
-						throw new Error([ res?.message || _('Unable to update mainland China IP list.'), res?.detail ].filter(Boolean).join('\n'));
+						throw new Error([ res?.message ? _(res.message) : _('Unable to update mainland China IP list.'), res?.detail ].filter(Boolean).join('\n'));
 					ui.addNotification(null, E('p', res.unchanged
 						? _('Mainland China IP list is already up to date.')
 						: _('Mainland China IP list updated. Restart MimoGate to apply it.')), 'info');
@@ -243,7 +243,7 @@ return view.extend({
 					portsInput.value = result.ports;
 				}
 				else {
-					ui.addNotification(null, E('p', result?.message || _('Unable to read the port list.')), 'danger');
+					ui.addNotification(null, E('p', result?.message ? _(result.message) : _('Unable to read the port list.')), 'danger');
 				}
 				if (result != null)
 					portsInput.disabled = portsApply.disabled = false;
