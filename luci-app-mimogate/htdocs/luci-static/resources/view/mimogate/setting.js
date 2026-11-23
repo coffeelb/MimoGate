@@ -155,9 +155,7 @@ return view.extend({
 				return;
 			}
 			const cls = st.running ? 'success' : 'danger';
-			const text = st.running
-				? (st.pid ? '%s (%d)'.format(_('Running'), st.pid) : _('Running'))
-				: _('Stopped');
+			const text = st.running ? _('Running') : _('Stopped');
 			dom.content(barStateEl, [
 				E('span', { 'class': 'mimogate-dot ' + cls }),
 				E('span', { 'class': 'mimogate-text ' + cls }, text)

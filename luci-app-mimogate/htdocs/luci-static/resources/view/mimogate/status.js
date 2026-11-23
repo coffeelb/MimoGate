@@ -70,7 +70,7 @@ return view.extend({
 				'class': 'cbi-input-textarea',
 				'readonly': 'readonly',
 				'wrap': 'off',
-				'rows': 12,
+				'rows': 15,
 				'style': 'width:100%; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; line-height:1.45'
 			});
 
@@ -125,12 +125,12 @@ return view.extend({
 				})
 			}, _('Clear log'));
 
-			const section = E('div', { 'class': 'cbi-map', 'style': 'margin-top: 1.5em' }, [
-				E('h3', { 'style': 'align-items: center; display: flex; gap: .5em' }, [
+			const section = E('div', { 'class': 'cbi-map', 'style': 'margin-top: .75em; margin-bottom: 0' }, [
+				E('h3', { 'style': 'align-items: center; display: flex; gap: .5em; margin: .25em 0 .4em' }, [
 					title,
 					clearBtn
 				]),
-				E('div', { 'class': 'cbi-section' }, [
+				E('div', { 'class': 'cbi-section', 'style': 'margin-bottom: .25em' }, [
 					errorEl,
 					textareaEl,
 					E('div', { 'style': 'text-align:right; margin-top:.25em' },
