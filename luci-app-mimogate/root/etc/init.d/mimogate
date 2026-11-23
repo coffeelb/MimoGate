@@ -447,7 +447,11 @@ mihomo_post_up() {
 		log_ports "Mihomo PID $1 does not own $TUN_DEVICE."
 		return 1
 	fi
-	start_routing "$1"
+	start_routing "$1" || return 1
+	(
+		[ "$(cat "$ROUTING_READY" 2>/dev/null)" = "$1" ] || exit 0
+		start_dnsmasq
+	) </dev/null >/dev/null 2>&1 &
 }
 
 start_routing() {
@@ -798,20 +802,6 @@ dnsmasq_upstream_conflict() {
 
 service_started() {
 	[ -z "${start_failed:-}" ] || return 1
-	local pid attempt
-	log_dnsmasq "Service startup callback entered (action ${action:-unknown}, PID $$)."
-	attempt=1
-	while [ "$attempt" -le 9 ]; do
-		pid="$(main_pid)"
-		if [ -n "$pid" ] && [ "$(cat "$ROUTING_READY" 2>/dev/null)" = "$pid" ]; then
-			start_dnsmasq
-			return $?
-		fi
-		[ "$attempt" = 9 ] || sleep 1
-		attempt=$((attempt + 1))
-	done
-	log_ports 'Mihomo did not finish installing the interception rules.'
-	return 1
 }
 
 start_dnsmasq() {
