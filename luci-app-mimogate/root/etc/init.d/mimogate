@@ -1,0 +1,600 @@
+#!/bin/sh /etc/rc.common
+
+UPGRADE_RUNNING=/var/run/mimogate-upgrade-running
+opkg_upgrade=
+[ "${PKG_ROOT+x}" ] && [ "${PKG_UPGRADE:-}" = 1 ] &&
+	[ -z "${APK_SCRIPT:-}" ] && opkg_upgrade=1
+
+# OpenWrt's package hooks call start even when the user has never started us.
+case "${action:-}" in
+	start)
+		[ -z "${IPKG_INSTROOT:-}" ] || exit 0
+		if [ "${PKG_ROOT+x}" ] || [ "${pkgname:-}" = "luci-app-mimogate" ]; then
+			[ "$opkg_upgrade" ] && [ -f "$UPGRADE_RUNNING" ] || exit 0
+			rm -f "$UPGRADE_RUNNING" || exit 1
+		fi
+		case "${APK_SCRIPT:-}" in
+			post-install|post-upgrade) exit 0 ;;
+		esac
+		;;
+	enable)
+		[ -z "${IPKG_INSTROOT:-}" ] || exit 0
+		[ -z "${PKG_ROOT+x}" ] && [ "${pkgname:-}" != "luci-app-mimogate" ] || exit 0
+		case "${APK_SCRIPT:-}" in
+			post-install|post-upgrade) exit 0 ;;
+		esac
+		;;
+esac
+
+START=99
+STOP=10
+USE_PROCD=1
+EXTRA_COMMANDS="clear_log apply_ports stop_routing wan_online update_cn"
+
+CORE=/usr/bin/mihomo
+WORKDIR=/etc/mimogate
+CONFIG="$WORKDIR/config.yaml"
+PORTS_CONFIG="$WORKDIR/proxy-ports"
+DEFAULT_PORTS_CONFIG=/usr/share/mimogate/proxy-ports.default
+LOG_DIR=/var/log/mimogate
+LOG_FILE="$LOG_DIR/mimogate.log"
+DNS_PORT=1053
+DNSMASQ_INIT=/etc/init.d/dnsmasq
+DNSMASQ_STATE=/var/run/mimogate-dnsmasq
+TUN_DEVICE=mimogate0
+ROUTE_TABLE=10900
+TUN_MARK=0x40000000
+CORE_MARK=0x20000000
+RUNTIME_CONFIG=/var/run/mimogate.yaml
+ROUTING_READY=/var/run/mimogate-routing.pid
+BOOT_WAN_PENDING=/var/run/mimogate-boot-wan
+ROUTING_UP='. /etc/init.d/mimogate; mihomo_post_up "$PPID"'
+ROUTING_DOWN='. /etc/init.d/mimogate; stop_routing "$PPID"'
+CN_CACHE="$WORKDIR/cn.list"
+CN_DEFAULT=/usr/share/mimogate/cn.list
+CN_URL=https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.list
+
+prepare_log() (
+	umask 077
+	mkdir -p "$LOG_DIR" && : >> "$LOG_FILE"
+)
+
+clear_log() {
+	prepare_log && : > "$LOG_FILE"
+}
+
+log_ports() {
+	prepare_log && printf '%s [firewall] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >> "$LOG_FILE"
+}
+
+normalize_ports() {
+	printf '%s\n' "$1" | awk -F, '
+		NR != 1 || NF == 0 { exit 1 }
+		{
+			for (i = 1; i <= NF; i++) {
+				gsub(/^[ \t]+|[ \t]+$/, "", $i)
+				if ($i !~ /^[0-9]+$/ || $i + 0 < 1 || $i + 0 > 65535)
+					exit 1
+				port = $i + 0
+				if (!seen[port]++)
+					ports = ports (ports == "" ? "" : ", ") port
+			}
+			if (length(ports) > 4096)
+				exit 1
+			print ports
+		}'
+}
+
+# Keep the user's YAML intact. Merge its normal block mapping into the runtime file.
+prepare_runtime_config() (
+	umask 077
+	awk -v device="$TUN_DEVICE" -v mark="$CORE_MARK" '
+		BEGIN { print "x-mimogate-config: &mimogateConfig" }
+		{ sub(/\r$/, "") }
+		/^(---|[.][.][.]|%)/ { invalid = 1 }
+		/^tun:[ \t]*(#.*)?$/ {
+			count++
+			print "  tun: &mimogateTun"
+			next
+		}
+		{ print "  " $0 }
+		END {
+			if (invalid || count != 1)
+				exit 1
+			print "<<: *mimogateConfig"
+			print "routing-mark: " mark
+			print "tun:"
+			print "  <<: *mimogateTun"
+			print "  device: " device
+			print "  auto-route: false"
+			print "  auto-redirect: false"
+		}
+	' "$1" > "$2"
+)
+
+check_runtime_config() {
+	if ! prepare_runtime_config "$1" "$2"; then
+		echo 'Use a single YAML document with a top-level block tun section.' >&2
+		return 1
+	fi
+	SKIP_SYSTEM_IPV6_CHECK=1 "$CORE" -t -d "$WORKDIR" -f "$2" \
+		-post-up "$ROUTING_UP" -post-down "$ROUTING_DOWN"
+}
+
+update_port_rules() {
+	nft -f - <<-EOF
+		flush set inet mimogate ports
+		add element inet mimogate ports { $1 }
+	EOF
+}
+
+prepare_cn_elements() {
+	awk -v dir="$2" '
+		/^[0-9.]+\/[0-9]+$/ { family = 4 }
+		/^[0-9a-fA-F:]+\/[0-9]+$/ && /:/ { family = 6 }
+		{
+			if (!family)
+				exit 1
+			printf "%s%s", (count[family]++ ? ", " : ""), $0 > (dir "/" family)
+			family = 0
+		}
+		END { if (!count[4] || !count[6]) exit 1 }
+	' "$1"
+}
+
+validate_cn_list() {
+	awk '
+		/^[0-9.]+\/[0-9]+$/ { count[4]++; next }
+		/^[0-9a-fA-F:]+\/[0-9]+$/ && /:/ { count[6]++; next }
+		{ exit 1 }
+		END { if (!count[4] || !count[6]) exit 1 }
+	' "$1"
+}
+
+update_cn() (
+	umask 077
+	local staged
+	mkdir -p "$WORKDIR" || return 1
+	staged="$(mktemp "$WORKDIR/.cn.XXXXXX")" || return 1
+	trap 'rm -f "$staged"' EXIT
+	if ! uclient-fetch -q -T 15 -O "$staged" "$CN_URL"; then
+		log_ports 'Could not download mainland China addresses.'
+		echo 'Could not download mainland China addresses.' >&2
+		return 1
+	fi
+	if ! validate_cn_list "$staged"; then
+		log_ports 'Downloaded mainland China address list is invalid.'
+		echo 'Downloaded mainland China address list is invalid.' >&2
+		return 1
+	fi
+	if [ -f "$CN_CACHE" ] && cmp -s "$staged" "$CN_CACHE"; then
+		log_ports 'Mainland China address cache is already up to date.'
+		printf '%s\n' unchanged
+		return 0
+	fi
+	if mv -f "$staged" "$CN_CACHE"; then
+		log_ports 'Saved mainland China address cache. Restart MimoGate to apply it.'
+		printf '%s\n' updated
+	else
+		log_ports 'Could not save the downloaded mainland China addresses.'
+		echo 'Could not save the downloaded mainland China addresses.' >&2
+		return 1
+	fi
+)
+
+routing_lock() {
+	exec 9>/var/lock/mimogate-routing.lock && flock 9
+}
+
+stop_routing() (
+	routing_lock || return 1
+	[ -z "${1:-}" ] || [ "$(cat "$ROUTING_READY" 2>/dev/null)" = "$1" ] || return 0
+	clear_routing
+)
+
+clear_routing() {
+	local family
+	rm -f "$ROUTING_READY"
+	nft delete table inet mimogate 2>/dev/null
+	for family in -4 -6; do
+		ip "$family" rule del pref "$ROUTE_TABLE" fwmark "$TUN_MARK/$TUN_MARK" lookup "$ROUTE_TABLE" 2>/dev/null
+		ip "$family" route del default dev "$TUN_DEVICE" table "$ROUTE_TABLE" 2>/dev/null
+	done
+	return 0
+}
+
+mihomo_post_up() {
+	# A busy TUN can still have the expected name but belong to an old core.
+	if ! grep -Eq "^iff:[[:space:]]+$TUN_DEVICE$" /proc/"$1"/fdinfo/* 2>/dev/null; then
+		log_ports "Mihomo PID $1 does not own $TUN_DEVICE."
+		return 1
+	fi
+	start_routing "$1"
+}
+
+start_routing() {
+	log_ports "Mihomo post-up entered (PID $$)."
+	install_routing "$@"
+}
+
+install_routing() (
+	local ports_file="$PORTS_CONFIG" ports lan family families=-4 ipv6_bypass= cn_staged cn_source=
+	log_ports "Waiting for routing lock (PID $$)."
+	routing_lock || return 1
+	log_ports "Routing lock acquired (PID $$)."
+	[ -e "$ports_file" ] || ports_file="$DEFAULT_PORTS_CONFIG"
+	ports="$(cat "$ports_file")" && ports="$(normalize_ports "$ports")" || return 1
+	lan="$(ubus call network.interface.lan status | jsonfilter -e '@.l3_device')"
+	case "$lan" in
+		''|*[!a-zA-Z0-9_.:@-]*) return 1 ;;
+	esac
+	ip link show dev "$TUN_DEVICE" >/dev/null || return 1
+	if ip -6 addr show dev "$TUN_DEVICE" scope global | grep -q 'inet6 '; then
+		families='-4 -6'
+	else
+		ipv6_bypass='meta nfproto ipv6 return'
+	fi
+	cn_staged="$(mktemp -d /tmp/mimogate-cn.XXXXXX)" || return 1
+	trap 'rm -f "$cn_staged/4" "$cn_staged/6"; rmdir "$cn_staged" 2>/dev/null' EXIT
+	if [ -s "$CN_CACHE" ] && prepare_cn_elements "$CN_CACHE" "$cn_staged"; then
+		cn_source=cached
+	elif rm -f "$cn_staged/4" "$cn_staged/6" && prepare_cn_elements "$CN_DEFAULT" "$cn_staged"; then
+		cn_source=bundled
+	else
+		rm -f "$cn_staged/4" "$cn_staged/6"
+	fi
+	clear_routing
+	trap 'rm -f "$cn_staged/4" "$cn_staged/6"; rmdir "$cn_staged" 2>/dev/null; clear_routing' EXIT
+	for family in $families; do
+		ip "$family" route add default dev "$TUN_DEVICE" table "$ROUTE_TABLE" &&
+			ip "$family" rule add pref "$ROUTE_TABLE" fwmark "$TUN_MARK/$TUN_MARK" lookup "$ROUTE_TABLE" || return 1
+	done
+
+	# Match after destination NAT so forwarded ports and local addresses keep their routes.
+	{
+		cat <<-EOF
+			table inet mimogate {
+				set ports { type inet_service; elements = { $ports }; }
+		EOF
+		if [ -n "$cn_source" ]; then
+			printf '\t\tset cn4 { type ipv4_addr; flags interval; auto-merge; elements = { '
+			cat "$cn_staged/4"
+			printf ' }; }\n'
+			printf '\t\tset cn6 { type ipv6_addr; flags interval; auto-merge; elements = { '
+			cat "$cn_staged/6"
+			printf ' }; }\n'
+		else
+			printf '\t\tset cn4 { type ipv4_addr; flags interval; auto-merge; }\n'
+			printf '\t\tset cn6 { type ipv6_addr; flags interval; auto-merge; }\n'
+		fi
+		cat <<-EOF
+				chain bypass {
+					$ipv6_bypass
+					ct direction reply return
+					fib daddr type { local, broadcast, multicast, anycast } return
+					ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/4, 240.0.0.0/4 } return
+					ip6 daddr { ::/128, ::1, fc00::/7, fe80::/10, ff00::/8 } return
+					ip daddr @cn4 counter return
+					ip6 daddr @cn6 counter return
+					meta mark set meta mark | $TUN_MARK
+				}
+				chain prerouting {
+					type filter hook prerouting priority -90; policy accept;
+					ct status dnat return
+					iifname "$lan" meta l4proto { tcp, udp } th dport @ports jump bypass
+				}
+				chain output {
+					type route hook output priority mangle; policy accept;
+					meta mark & $CORE_MARK != 0 return
+					udp dport 67 return
+					meta l4proto { tcp, udp } jump bypass
+				}
+			}
+		EOF
+	} | nft -f - || return 1
+	[ -z "${1:-}" ] || printf '%s\n' "$1" > "$ROUTING_READY" || return 1
+	trap - EXIT
+	rm -f "$cn_staged/4" "$cn_staged/6"
+	rmdir "$cn_staged" 2>/dev/null
+	log_ports "Loaded LAN interception ports: $ports."
+	case "$cn_source" in
+		cached) log_ports 'Loaded cached mainland China address sets.' ;;
+		bundled) log_ports 'Loaded bundled mainland China address sets.' ;;
+		*) log_ports 'Could not load initial mainland China address sets.' ;;
+	esac
+	return 0
+)
+
+commit_ports() (
+	umask 077
+	local staged
+	mkdir -p "$WORKDIR" || return 1
+	staged="$(mktemp -d "$WORKDIR/.proxy-ports.XXXXXX")" || return 1
+	trap 'rm -f "$staged/new" "$staged/previous"; rmdir "$staged"' EXIT
+	if [ "$2" = live ] && [ -e "$PORTS_CONFIG" ]; then
+		cp -p "$PORTS_CONFIG" "$staged/previous" || return 1
+	fi
+	printf '%s\n' "$1" > "$staged/new" && mv -f "$staged/new" "$PORTS_CONFIG" || {
+		echo 'Could not save the port list.' >&2
+		return 1
+	}
+	[ "$2" = live ] || return 0
+	update_port_rules "$1" && return 0
+
+	if [ -f "$staged/previous" ]; then
+		mv -f "$staged/previous" "$PORTS_CONFIG" || {
+			trap - EXIT
+			echo "Could not restore the saved port list. Backup: $staged/previous" >&2
+		}
+	else
+		rm -f "$PORTS_CONFIG" || echo 'Could not remove the newly saved port list.' >&2
+	fi
+	return 1
+)
+
+apply_ports() (
+	local ports error mode=deferred
+	procd_lock
+	routing_lock || return 1
+	procd_running mimogate main && nft list set inet mimogate ports >/dev/null 2>&1 && mode=live
+	if ! ports="$(normalize_ports "${1:-}")"; then
+		error='Enter ports from 1 to 65535 separated by ASCII commas (,).'
+	elif error="$(commit_ports "$ports" "$mode" 2>&1)"; then
+		printf '%s\n' "$ports"
+		if [ "$mode" = live ]; then
+			log_ports "Applied port bypass. LAN interception ports: $ports."
+		else
+			log_ports "Saved port bypass for the next start. LAN interception ports: $ports."
+			printf '%s\n' deferred
+		fi
+		return 0
+	fi
+	log_ports "Could not apply port bypass: $error"
+	printf '%s\n' "$error" >&2
+	return 1
+)
+
+log_dnsmasq() {
+	logger -t mimogate "$1"
+	if [ -f "$LOG_FILE" ]; then
+		printf '%s [dnsmasq] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >> "$LOG_FILE"
+	fi
+}
+
+fw4_tunnel_ready() {
+	nft list chain inet fw4 input 2>/dev/null | grep -Fq 'mimogate tunnel input' &&
+		nft list chain inet fw4 forward 2>/dev/null | grep -Fq 'mimogate tunnel'
+}
+
+wan_link_state() {
+	ubus call network.interface.wan status 2>/dev/null | jsonfilter -e '@.up'
+}
+
+boot() {
+	procd_lock
+	local defer_wan
+	if [ "$(wan_link_state)" != false ]; then
+		start "$@"
+		return $?
+	fi
+
+	: > "$BOOT_WAN_PENDING" || return 1
+	defer_wan=1
+	rc_procd : || {
+		rm -f "$BOOT_WAN_PENDING"
+		return 1
+	}
+	defer_wan=
+	log_ports 'Waiting for WAN before starting Mihomo.'
+	# Cover WAN coming up before procd registered the trigger.
+	wan_online "$@"
+}
+
+wan_online() {
+	procd_lock
+	[ -f "$BOOT_WAN_PENDING" ] && [ "$(wan_link_state)" = true ] || return 0
+	start "$@"
+}
+
+start_service() {
+	start_failed=1
+	rm -f "$BOOT_WAN_PENDING"
+	prepare_log || return 1
+	if [ ! -x "$CORE" ] || [ ! -s "$CONFIG" ]; then
+		printf '%s\n' "Missing Mihomo executable or configuration at $CONFIG." >> "$LOG_FILE"
+		return 1
+	fi
+
+	if ! prepare_runtime_config "$CONFIG" "$RUNTIME_CONFIG"; then
+		log_ports 'Could not generate the runtime YAML. Check that the document has a top-level block tun section.'
+		return 1
+	fi
+	if ! fw4_tunnel_ready && ! { fw4 reload && fw4_tunnel_ready; }; then
+		log_ports 'Could not install the fw4 tunnel input and forwarding rules. Check that auto_includes is enabled.'
+		return 1
+	fi
+	procd_open_instance main
+	# Set up TUN IPv6 even if WAN IPv6 is still coming up.
+	procd_set_param env SKIP_SYSTEM_IPV6_CHECK=1
+	procd_set_param command /bin/sh -c 'log="$1"; shift; exec >> "$log" 2>&1; exec "$@"' \
+		mimogate "$LOG_FILE" "$CORE" -d "$WORKDIR" -f "$RUNTIME_CONFIG" \
+		-post-up "$ROUTING_UP" -post-down "$ROUTING_DOWN"
+	procd_set_param respawn 3600 5 3
+	procd_set_param term_timeout 10
+	procd_close_instance
+
+	procd_open_instance log_maintenance
+	procd_set_param command /bin/sh -c '
+		while sleep 180; do
+			[ "$(wc -c < "$1")" -lt 65536 ] || : > "$1"
+		done
+	' mimogate-log "$LOG_FILE"
+	procd_set_param respawn 3600 5 3
+	procd_close_instance
+	start_failed=
+}
+
+main_pid() {
+	ubus call service list '{"name":"mimogate"}' |
+		jsonfilter -e '@.mimogate.instances.main.pid'
+}
+
+restart() {
+	procd_lock
+	local old_pid attempt
+	old_pid="$(main_pid)"
+	log_ports "Stopping previous Mihomo instance (PID ${old_pid:-none})."
+	stop "$@" || return 1
+	log_ports "Waiting for previous Mihomo instance and $TUN_DEVICE to exit."
+
+	attempt=1
+	while [ "$attempt" -le 11 ]; do
+		if { [ -z "$old_pid" ] || ! kill -0 "$old_pid" 2>/dev/null; } &&
+			! ip link show dev "$TUN_DEVICE" >/dev/null 2>&1; then
+			log_ports "Previous Mihomo instance released $TUN_DEVICE. Starting again."
+			start "$@"
+			return $?
+		fi
+		[ "$attempt" = 11 ] || sleep 1
+		attempt=$((attempt + 1))
+	done
+	log_ports "Previous Mihomo instance did not release $TUN_DEVICE."
+	return 1
+}
+
+mihomo_dns_ready() {
+	local pid attempt
+	log_dnsmasq "Waiting for Mihomo DNS (PID $$)."
+	for attempt in 1 2 3 4 5; do
+		pid="$(main_pid)"
+		if [ -n "$pid" ] && [ "$(cat "$ROUTING_READY" 2>/dev/null)" = "$pid" ] &&
+			netstat -lnup 2>/dev/null | awk -v pid="$pid" -v port="$DNS_PORT" '
+			($4 == "127.0.0.1:" port || $4 == "0.0.0.0:" port ||
+			 $4 == ":::" port || $4 == "[::]:" port) && index($NF, pid "/") == 1 { found = 1 }
+			END { exit !found }'; then
+			log_dnsmasq "Mihomo DNS listener ready on attempt $attempt (Mihomo PID $pid)."
+			return 0
+		fi
+		[ "$attempt" = 5 ] || sleep 1
+	done
+	return 1
+}
+
+dnsmasq_upstream_conflict() {
+	local config="$1" dir="$2" dropin="$3" file
+	{
+		printf '%s\n' "$config" "$dir"/*
+		sed -n 's/^conf-file=//p' "$config"
+	} | while IFS= read -r file; do
+		case "$file" in
+			"$dropin"|*~|*/\#*\#) continue ;;
+		esac
+		[ -f "$file" ] || continue
+		# A bare address or /#/ applies to every domain.
+		if grep -Eq '^[[:space:]]*server[[:space:]]*=[[:space:]]*([^/[:space:]]|/#/)' "$file"; then
+			printf '%s\n' "$file"
+			break
+		fi
+	done
+}
+
+service_started() {
+	[ -z "${start_failed:-}" ] || return 1
+	local pid attempt
+	log_dnsmasq "Service startup callback entered (action ${action:-unknown}, PID $$)."
+	attempt=1
+	while [ "$attempt" -le 11 ]; do
+		pid="$(main_pid)"
+		if [ -n "$pid" ] && [ "$(cat "$ROUTING_READY" 2>/dev/null)" = "$pid" ]; then
+			start_dnsmasq
+			return $?
+		fi
+		[ "$attempt" = 11 ] || sleep 1
+		attempt=$((attempt + 1))
+	done
+	log_ports 'Mihomo did not finish installing the interception rules.'
+	return 1
+}
+
+start_dnsmasq() {
+	local section config dir dropin previous conflict temporary error
+	section="$(uci -q show 'dhcp.@dnsmasq[0]' | sed -n '1s/^dhcp\.\([^=]*\)=dnsmasq$/\1/p')"
+	config="/tmp/etc/dnsmasq.conf.$section"
+	dir="$(sed -n 's/^conf-dir=//p' "$config" 2>/dev/null | head -n 1)"
+	# Use only an unfiltered directory that disappears at reboot.
+	case "$dir" in
+		/*,*) dir= ;;
+		/*) dir="$(readlink -f "$dir" 2>/dev/null)" ;;
+		*) dir= ;;
+	esac
+	case "$dir" in /tmp/*) ;; *) dir= ;; esac
+	dropin="$dir/mimogate.conf"
+
+	previous="$(cat "$DNSMASQ_STATE" 2>/dev/null)"
+	if [ -n "$previous" ] && [ "$previous" != "$dropin" ]; then
+		restore_dnsmasq || return 0
+	fi
+	if [ ! -x "$DNSMASQ_INIT" ] || [ ! -d "$dir" ]; then
+		error='Skipping DNS forwarding: no supported dnsmasq configuration directory.'
+	elif conflict="$(dnsmasq_upstream_conflict "$config" "$dir" "$dropin")" && [ -n "$conflict" ]; then
+		error="Skipping DNS forwarding: existing upstream in $conflict."
+	elif ! mihomo_dns_ready; then
+		error="Skipping DNS forwarding: Mihomo has no local DNS listener on port $DNS_PORT."
+	elif temporary="$(mktemp "$dir/.mimogate.XXXXXX")" &&
+		printf '%s\n' no-resolv "server=127.0.0.1#$DNS_PORT" > "$temporary" &&
+		printf '%s\n' "$dropin" > "$DNSMASQ_STATE" &&
+		mv -f "$temporary" "$dropin"; then
+		log_dnsmasq "Validating and restarting dnsmasq (PID $$)."
+		if /usr/sbin/dnsmasq --test -C "$config" &&
+			"$DNSMASQ_INIT" restart && procd_running dnsmasq "$section"; then
+			log_dnsmasq "dnsmasq forwarding enabled on 127.0.0.1:$DNS_PORT."
+			return 0
+		fi
+		error='Could not enable dnsmasq forwarding. Restoring the original upstream.'
+	else
+		[ -z "$temporary" ] || rm -f "$temporary"
+		error='Could not write the dnsmasq forwarding fragment.'
+	fi
+	log_dnsmasq "$error"
+	restore_dnsmasq
+	return 0
+}
+
+stop_service() {
+	case "${action:-}" in
+		stop|restart|shutdown)
+			rm -f "$BOOT_WAN_PENDING"
+			stop_routing
+			;;
+	esac
+	if [ "${action:-}" = stop ]; then
+		rm -f "$UPGRADE_RUNNING"
+		if [ "$opkg_upgrade" ] && procd_running mimogate main; then
+			: > "$UPGRADE_RUNNING" || logger -t mimogate 'Could not record running state for package upgrade.'
+		fi
+	fi
+	restore_dnsmasq
+}
+
+restore_dnsmasq() {
+	local dropin
+	dropin="$(cat "$DNSMASQ_STATE" 2>/dev/null)" || return 0
+	case "$dropin" in
+		/tmp/*/mimogate.conf) ;;
+		*) return 1 ;;
+	esac
+	if rm -f "$dropin" && "$DNSMASQ_INIT" restart; then
+		rm -f "$DNSMASQ_STATE"
+		log_dnsmasq 'Original dnsmasq upstream restored.'
+	else
+		log_dnsmasq 'Could not restore the original dnsmasq upstream.'
+		return 1
+	fi
+}
+
+service_triggers() {
+	[ -z "${start_failed:-}" ] || return 0
+	local command=restart
+	[ "${defer_wan:-}" != 1 ] || command=wan_online
+	procd_add_interface_trigger "interface.*.up" wan /etc/init.d/mimogate "$command"
+}

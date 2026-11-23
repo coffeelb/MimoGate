@@ -1,0 +1,86 @@
+mode: rule
+log-level: error
+ipv6: true
+
+proxies:
+  - name: main-out
+    type: hysteria2
+    server: 192.0.2.1
+    port: 443
+    password: ""
+    up: "80 Mbps"
+    down: "80 Mbps"
+    sni: example.com
+    skip-cert-verify: false
+
+tun:
+  enable: true
+  stack: system
+  auto-route: true
+  auto-redirect: true
+  auto-detect-interface: true
+  dns-hijack:
+    - any:53
+    - tcp://any:53
+  route-exclude-address:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 169.254.0.0/16
+    - "fc00::/7"
+    - "fe80::/10"
+
+dns:
+  enable: true
+  listen: 127.0.0.1:1053
+  ipv6: true
+  enhanced-mode: redir-host
+  default-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  proxy-server-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  nameserver:
+    - "https://1.1.1.1/dns-query#main-out"
+  direct-nameserver:
+    - "https://dns.alidns.com/dns-query#DIRECT"
+  nameserver-policy:
+    "rule-set:cn_domain": "https://dns.alidns.com/dns-query#DIRECT"
+
+sniffer:
+  enable: true
+  parse-pure-ip: true
+  override-destination: false
+  sniff:
+    HTTP:
+      ports: [80]
+    TLS:
+      ports: [443]
+    QUIC:
+      ports: [443]
+
+rule-providers:
+  cn_ip:
+    type: http
+    behavior: ipcidr
+    format: mrs
+    path: ./rules/cn_ip.mrs
+    url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.mrs
+    proxy: main-out
+    interval: 86400
+  cn_domain:
+    type: http
+    behavior: domain
+    format: mrs
+    path: ./rules/cn_domain.mrs
+    url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs
+    proxy: main-out
+    interval: 86400
+
+rules:
+  - AND,((NETWORK,udp),(DST-PORT,80/443)),REJECT
+  - DOMAIN-SUFFIX,browserleaks.com,main-out
+  - RULE-SET,cn_domain,DIRECT
+  - RULE-SET,cn_ip,DIRECT
+  - MATCH,main-out

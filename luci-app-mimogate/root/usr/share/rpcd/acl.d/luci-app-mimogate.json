@@ -1,0 +1,24 @@
+{
+  "luci-app-mimogate": {
+    "description": "Manage the MimoGate service and its YAML configuration",
+    "read": {
+      "ubus": {
+        "mimogate": [ "status", "version", "boot_status", "read_config", "read_ports" ]
+      }
+    },
+    "write": {
+      "ubus": {
+        "mimogate": [ "service_action", "check_config", "save_config", "apply_ports", "update_cn" ]
+      }
+    }
+  },
+  "luci-app-mimogate-log": {
+    "description": "Read the MimoGate log",
+    "read": {
+      "cgi-io": [ "download" ],
+      "file": {
+        "/var/log/mimogate/mimogate.log": [ "read" ]
+      }
+    }
+  }
+}

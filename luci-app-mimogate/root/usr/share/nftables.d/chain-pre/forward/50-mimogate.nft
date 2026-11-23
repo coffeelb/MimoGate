@@ -1,0 +1,1 @@
+meta mark & 0x40000000 != 0 oifname "mimogate0" counter accept comment "mimogate tunnel"

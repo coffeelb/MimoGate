@@ -1,0 +1,1 @@
+iifname "mimogate0" meta l4proto tcp counter accept comment "mimogate tunnel input"

@@ -1,0 +1,152 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: zh_Hans\n"
+
+msgid "Check"
+msgstr "校验"
+
+msgid "Clear log"
+msgstr "清空日志"
+
+msgid "Configuration is valid."
+msgstr "配置有效。"
+
+msgid "Configuration"
+msgstr "配置"
+
+msgid "Control"
+msgstr "操作"
+
+msgid "Edit the Mihomo YAML configuration directly. It is validated with \"mihomo -t\" before it is saved."
+msgstr "直接编辑 Mihomo 的 YAML 配置。保存前会通过“mihomo -t”校验。"
+
+msgid "Log"
+msgstr "日志"
+
+msgid "No log entries yet."
+msgstr "暂无日志。"
+
+msgid "Not found"
+msgstr "未找到"
+
+msgid "Not saved: the configuration is invalid."
+msgstr "配置无效，未保存。"
+
+msgid "Restart"
+msgstr "重启"
+
+msgid "Running"
+msgstr "运行中"
+
+msgid "Save and restart"
+msgstr "保存并重启"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Saved, but the service failed to restart:"
+msgstr "已保存，但服务重启失败："
+
+msgid "Saved. Restart the service to apply the changes."
+msgstr "已保存。重启服务后应用更改。"
+
+msgid "Saved. The service was restarted."
+msgstr "已保存，服务已重启。"
+
+msgid "Service"
+msgstr "服务"
+
+msgid "MimoGate configuration"
+msgstr "MimoGate 配置"
+
+msgid "Start on boot"
+msgstr "开机自启"
+
+msgid "Start"
+msgstr "启动"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "Stop"
+msgstr "停止"
+
+msgid "Stopped"
+msgstr "未运行"
+
+msgid "Unknown"
+msgstr "状态未知"
+
+msgid "Mihomo version"
+msgstr "Mihomo 版本"
+
+msgid "Unable to read the log."
+msgstr "无法读取日志。"
+
+msgid "Restore defaults"
+msgstr "恢复默认"
+
+msgid "Default configuration loaded. Save to apply it."
+msgstr "已载入默认配置。请保存以应用。"
+
+msgid "Service action failed."
+msgstr "服务操作失败。"
+
+msgid "Request failed."
+msgstr "请求失败。"
+
+msgid "The configuration exceeds the web editor size limit."
+msgstr "配置超出网页传输上限。"
+
+msgid "Apply"
+msgstr "应用"
+
+msgid "Firewall port bypass"
+msgstr "防火墙端口绕过"
+
+msgid "Intercepted ports"
+msgstr "接管端口"
+
+msgid "Not applied yet."
+msgstr "尚未应用。"
+
+msgid "Port bypass applied."
+msgstr "端口绕过已应用。"
+
+msgid "Saved. Takes effect the next time MimoGate starts."
+msgstr "已保存，下次启动 MimoGate 时生效。"
+
+msgid "TCP and UDP destination ports outside this list bypass Mihomo. Separate ports with commas (,)."
+msgstr "名单外的 TCP 和 UDP 目标端口绕过 Mihomo。请用英文逗号（,）分隔端口。"
+
+msgid "Unable to apply port bypass."
+msgstr "无法应用防火墙端口绕过。"
+
+msgid "Unable to read the port list."
+msgstr "无法读取接管端口。"
+
+msgid "Mainland China IP"
+msgstr "中国大陆 IP"
+
+msgid "Cached"
+msgstr "缓存"
+
+msgid "Bundled snapshot"
+msgstr "内置快照"
+
+msgid "Update list"
+msgstr "更新列表"
+
+msgid "Updates are saved to cache and take effect the next time MimoGate starts."
+msgstr "更新后将保存到缓存，下次重启 MimoGate 时生效。"
+
+msgid "Mainland China IP list is already up to date."
+msgstr "中国大陆 IP 列表已是最新。"
+
+msgid "Mainland China IP list updated. Restart MimoGate to apply it."
+msgstr "中国大陆 IP 列表已更新，重启 MimoGate 后生效。"
+
+msgid "Unable to update mainland China IP list."
+msgstr "无法更新中国大陆 IP 列表。"
