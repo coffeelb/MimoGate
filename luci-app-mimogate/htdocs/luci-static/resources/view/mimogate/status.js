@@ -20,6 +20,11 @@ const readPorts = rpc.declare({ object: 'mimogate', method: 'read_ports', reject
 const applyPorts = rpc.declare({
 	object: 'mimogate', method: 'apply_ports', params: [ 'ports' ], reject: true
 });
+const readAcl = rpc.declare({ object: 'mimogate', method: 'read_acl', reject: true });
+const saveAcl = rpc.declare({
+	object: 'mimogate', method: 'save_acl', params: [ 'mode', 'entries' ], reject: true
+});
+const getHostHints = rpc.declare({ object: 'luci-rpc', method: 'getHostHints', expect: { '': {} } });
 const updateCn = rpc.declare({ object: 'mimogate', method: 'update_cn', reject: true });
 
 function formatMtime(epoch) {
@@ -206,6 +211,60 @@ return view.extend({
 			})
 		}, _('Apply'));
 
+		const aclMode = E('select', { 'class': 'cbi-input-select', 'disabled': 'disabled' }, [
+			E('option', { 'value': 'all' }, _('All LAN devices')),
+			E('option', { 'value': 'bypass' }, _('Bypass listed devices')),
+			E('option', { 'value': 'proxy' }, _('Proxy listed devices only'))
+		]);
+		const aclPicker = E('select', { 'class': 'cbi-input-select', 'disabled': 'disabled' }, [
+			E('option', { 'value': '' }, _('-- Add online device (MAC / IP) --'))
+		]);
+		const aclInput = E('textarea', {
+			'class': 'cbi-input-textarea',
+			'rows': 2,
+			'placeholder': 'aa:bb:cc:dd:ee:ff, 192.168.1.50',
+			'style': 'width:100%; font-family:monospace; margin-top:.5em',
+			'disabled': 'disabled'
+		});
+		const syncAclState = (enabled) => {
+			const listEnabled = enabled && aclMode.value !== 'all';
+			aclMode.disabled = !enabled;
+			aclSave.disabled = !enabled;
+			aclInput.disabled = !listEnabled;
+			aclPicker.disabled = !listEnabled || aclPicker.options.length <= 1;
+		};
+		aclMode.addEventListener('change', () => syncAclState(true));
+		aclPicker.addEventListener('change', () => {
+			const val = aclPicker.value;
+			aclPicker.value = '';
+			if (!val)
+				return;
+			const cur = aclInput.value.split(/[\s,]+/).filter(Boolean);
+			if (!cur.some(x => x.toLowerCase() === val.toLowerCase()))
+				cur.push(val);
+			aclInput.value = cur.join(', ');
+		});
+		const aclSave = E('button', {
+			'type': 'button',
+			'class': 'btn cbi-button cbi-button-save',
+			'disabled': 'disabled',
+			'click': ui.createHandlerFn(this, async () => {
+				syncAclState(false);
+				const res = await saveAcl(aclMode.value, aclInput.value).catch(error => ({ message: error.message }));
+				syncAclState(true);
+				if (!res?.ok) {
+					ui.addNotification(null, E('p', [ res?.message ? _(res.message) : _('Unable to save access control settings.'), res?.detail ]
+						.filter(Boolean).join('\n')), 'danger');
+					return;
+				}
+				aclMode.value = res.mode;
+				aclInput.value = res.entries;
+				syncAclState(true);
+				ui.addNotification(null, E('p', _('Saved. Takes effect the next time MimoGate starts.')), 'info');
+				await syncLog();
+			})
+		}, _('Save'));
+
 		const updateCnBtn = E('button', {
 			'type': 'button',
 			'class': 'btn cbi-button cbi-button-action',
@@ -248,6 +307,32 @@ return view.extend({
 				if (result != null)
 					portsInput.disabled = portsApply.disabled = false;
 			});
+			Promise.all([
+				L.resolveDefault(readAcl(), null),
+				L.resolveDefault(getHostHints(), {})
+			]).then(([ aclRes, hosts ]) => {
+				const entries = Object.entries(hosts || {}).sort((a, b) =>
+					String(a[1]?.name || a[0]).localeCompare(String(b[1]?.name || b[0])));
+				for (const [ mac, info ] of entries) {
+					const label = info?.name ? info.name + ' — ' : '';
+					if (mac)
+						aclPicker.appendChild(E('option', { 'value': mac.toLowerCase() }, '%s%s (MAC)'.format(label, mac.toLowerCase())));
+					for (const ip of (info?.ipaddrs || []))
+						aclPicker.appendChild(E('option', { 'value': ip }, '%s%s'.format(label, ip)));
+					for (const ip6 of (info?.ip6addrs || []))
+						if (!/^fe80:/i.test(ip6))
+							aclPicker.appendChild(E('option', { 'value': ip6 }, '%s%s'.format(label, ip6)));
+				}
+				if (aclRes?.ok) {
+					aclMode.value = aclRes.mode;
+					aclInput.value = aclRes.entries;
+				}
+				else if (aclRes != null) {
+					ui.addNotification(null, E('p', aclRes?.message ? _(aclRes.message) : _('Unable to read access control settings.')), 'danger');
+				}
+				if (aclRes != null)
+					syncAclState(true);
+			});
 			refresh();
 		}, 0);
 
@@ -263,6 +348,12 @@ return view.extend({
 					E('div', { 'style': 'display:flex; gap:.5em; flex-wrap:wrap' }, [ portsInput, portsApply ]),
 					E('div', { 'class': 'cbi-value-description' },
 						_('TCP and UDP destination ports outside this list bypass Mihomo. Separate ports with commas (,).'))
+				]),
+				row(_('Access control'), [
+					E('div', { 'style': 'display:flex; gap:.5em; flex-wrap:wrap' }, [ aclMode, aclPicker, aclSave ]),
+					aclInput,
+					E('div', { 'class': 'cbi-value-description' },
+						_('Control which LAN devices use Mihomo by MAC, IPv4, IPv6, or CIDR. Changes take effect the next time MimoGate starts.'))
 				]),
 				row(_('Mainland China IP'), [
 					E('div', { 'style': 'display:flex; align-items:center; gap:.75em; flex-wrap:wrap' }, [ cnStateEl, updateCnBtn ]),

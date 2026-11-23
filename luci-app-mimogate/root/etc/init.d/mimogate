@@ -29,12 +29,13 @@ esac
 START=99
 STOP=10
 USE_PROCD=1
-EXTRA_COMMANDS="clear_log apply_ports stop_routing wan_online update_cn"
+EXTRA_COMMANDS="clear_log apply_ports save_acl stop_routing wan_online update_cn"
 
 CORE=/usr/bin/mihomo
 WORKDIR=/etc/mimogate
 CONFIG="$WORKDIR/config.yaml"
 PORTS_CONFIG="$WORKDIR/proxy-ports"
+ACL_CONFIG="$WORKDIR/access-control"
 DEFAULT_PORTS_CONFIG=/usr/share/mimogate/proxy-ports.default
 LOG_DIR=/var/log/mimogate
 LOG_FILE="$LOG_DIR/mimogate.log"
@@ -84,6 +85,83 @@ normalize_ports() {
 			print ports
 		}'
 }
+
+normalize_acl_entries() {
+	printf '%s\n' "$1" | awk '
+		{
+			n = split($0, arr, /[, \t\r\n]+/)
+			for (i = 1; i <= n; i++) {
+				if (arr[i] == "") continue
+				item = tolower(arr[i])
+				if (item !~ /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/ &&
+				    item !~ /^[0-9.]+(\/[0-9]+)?$/ &&
+				    !(item ~ /^[0-9a-f:]+(\/[0-9]+)?$/ && index(item, ":") > 0))
+					exit 1
+				if (!seen[item]++)
+					out = out (out == "" ? "" : ", ") item
+			}
+		}
+		END {
+			if (length(out) > 4096)
+				exit 1
+			print out
+		}'
+}
+
+emit_acl_sets() {
+	printf '%s\n' "$1" | awk '
+		{
+			n = split($0, arr, /[, \t\r\n]+/)
+			for (i = 1; i <= n; i++) {
+				if (arr[i] == "") continue
+				if (arr[i] ~ /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/)
+					mac = mac (mac ? ", " : "") arr[i]
+				else if (index(arr[i], ":") > 0)
+					ip6 = ip6 (ip6 ? ", " : "") arr[i]
+				else
+					ip4 = ip4 (ip4 ? ", " : "") arr[i]
+			}
+		}
+		END {
+			if (mac) printf "\t\tset acl_mac { type ether_addr; elements = { %s }; }\n", mac
+			if (ip4) printf "\t\tset acl_ip4 { type ipv4_addr; flags interval; auto-merge; elements = { %s }; }\n", ip4
+			if (ip6) printf "\t\tset acl_ip6 { type ipv6_addr; flags interval; auto-merge; elements = { %s }; }\n", ip6
+		}'
+}
+
+save_acl() (
+	umask 077
+	local mode="${1:-all}" entries sets staged
+	case "$mode" in
+		all|bypass|proxy) ;;
+		*)
+			echo 'Invalid access control mode.' >&2
+			return 1
+			;;
+	esac
+	if ! entries="$(normalize_acl_entries "${2:-}")"; then
+		echo 'Enter valid MAC addresses, IPv4/IPv6 addresses, or CIDRs.' >&2
+		return 1
+	fi
+	if [ -n "$entries" ]; then
+		sets="$(emit_acl_sets "$entries")"
+		if ! { printf 'table inet mimogate_acl_check {\n%s\n}\n' "$sets" | nft -c -f - >/dev/null 2>&1; }; then
+			echo 'Access control list contains an invalid MAC or IP address.' >&2
+			return 1
+		fi
+	fi
+	mkdir -p "$WORKDIR" || return 1
+	staged="$(mktemp "$WORKDIR/.acl.XXXXXX")" || return 1
+	trap 'rm -f "$staged"' EXIT
+	if printf '%s\n%s\n' "$mode" "$entries" > "$staged" && mv -f "$staged" "$ACL_CONFIG"; then
+		trap - EXIT
+		log_ports "Saved access control (mode: $mode). Restart MimoGate to apply it."
+		printf '%s\n%s\n' "$mode" "$entries"
+		return 0
+	fi
+	echo 'Could not save access control settings.' >&2
+	return 1
+)
 
 # Keep the user's YAML intact. Merge its normal block mapping into the runtime file.
 prepare_runtime_config() (
@@ -234,12 +312,23 @@ start_routing() {
 }
 
 install_routing() (
-	local ports_file="$PORTS_CONFIG" ports lan family families=-4 ipv6_bypass= cn_file= cn_source=
+	local ports_file="$PORTS_CONFIG" ports lan family families=-4 ipv6_bypass= cn_file= cn_source= acl_mode=all acl_entries= acl_sets=
 	log_ports "Waiting for routing lock (PID $$)."
 	routing_lock || return 1
 	log_ports "Routing lock acquired (PID $$)."
 	[ -e "$ports_file" ] || ports_file="$DEFAULT_PORTS_CONFIG"
 	ports="$(cat "$ports_file")" && ports="$(normalize_ports "$ports")" || return 1
+	if [ -s "$ACL_CONFIG" ]; then
+		acl_mode="$(sed -n '1p' "$ACL_CONFIG")"
+		acl_entries="$(sed -n '2p' "$ACL_CONFIG")"
+		case "$acl_mode" in
+			all|bypass|proxy) ;;
+			*) acl_mode=all; acl_entries= ;;
+		esac
+		if [ "$acl_mode" != all ] && [ -n "$acl_entries" ]; then
+			acl_entries="$(normalize_acl_entries "$acl_entries")" && acl_sets="$(emit_acl_sets "$acl_entries")" || return 1
+		fi
+	fi
 	lan="$(ubus call network.interface.lan status | jsonfilter -e '@.l3_device')"
 	case "$lan" in
 		''|*[!a-zA-Z0-9_.:@-]*) return 1 ;;
@@ -271,6 +360,9 @@ install_routing() (
 				set ports { type inet_service; elements = { $ports }; }
 				set cn4 { type ipv4_addr; flags interval; auto-merge; }
 				set cn6 { type ipv6_addr; flags interval; auto-merge; }
+		EOF
+		[ -z "$acl_sets" ] || printf '%s\n' "$acl_sets"
+		cat <<-EOF
 				chain bypass {
 					$ipv6_bypass
 					ct direction reply return
@@ -284,7 +376,24 @@ install_routing() (
 				chain prerouting {
 					type filter hook prerouting priority -90; policy accept;
 					ct status dnat return
-					iifname "$lan" meta l4proto { tcp, udp } th dport @ports jump bypass
+		EOF
+		case "$acl_mode" in
+			bypass)
+				case "$acl_sets" in *'set acl_mac '*) printf '\t\tiifname "%s" ether saddr @acl_mac return\n' "$lan" ;; esac
+				case "$acl_sets" in *'set acl_ip4 '*) printf '\t\tiifname "%s" ip saddr @acl_ip4 return\n' "$lan" ;; esac
+				case "$acl_sets" in *'set acl_ip6 '*) printf '\t\tiifname "%s" ip6 saddr @acl_ip6 return\n' "$lan" ;; esac
+				printf '\t\tiifname "%s" meta l4proto { tcp, udp } th dport @ports jump bypass\n' "$lan"
+				;;
+			proxy)
+				case "$acl_sets" in *'set acl_mac '*) printf '\t\tiifname "%s" ether saddr @acl_mac meta l4proto { tcp, udp } th dport @ports goto bypass\n' "$lan" ;; esac
+				case "$acl_sets" in *'set acl_ip4 '*) printf '\t\tiifname "%s" ip saddr @acl_ip4 meta l4proto { tcp, udp } th dport @ports goto bypass\n' "$lan" ;; esac
+				case "$acl_sets" in *'set acl_ip6 '*) printf '\t\tiifname "%s" ip6 saddr @acl_ip6 meta l4proto { tcp, udp } th dport @ports goto bypass\n' "$lan" ;; esac
+				;;
+			*)
+				printf '\t\tiifname "%s" meta l4proto { tcp, udp } th dport @ports jump bypass\n' "$lan"
+				;;
+		esac
+		cat <<-EOF
 				}
 				chain output {
 					type route hook output priority mangle; policy accept;
@@ -299,6 +408,7 @@ install_routing() (
 	[ -z "${1:-}" ] || printf '%s\n' "$1" > "$ROUTING_READY" || return 1
 	trap - EXIT
 	log_ports "Loaded LAN interception ports: $ports."
+	[ "$acl_mode" = all ] || log_ports "Loaded LAN access control (mode: $acl_mode)."
 	case "$cn_source" in
 		cached) log_ports 'Loaded cached mainland China address sets.' ;;
 		bundled) log_ports 'Loaded bundled mainland China address sets.' ;;

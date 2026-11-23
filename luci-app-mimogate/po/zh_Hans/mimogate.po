@@ -210,3 +210,39 @@ msgstr "无效的服务操作。"
 
 msgid "Save a YAML configuration on the Configuration page first."
 msgstr "请先在配置文件页保存 YAML。"
+
+msgid "Access control"
+msgstr "访问控制"
+
+msgid "All LAN devices"
+msgstr "全部设备走代理"
+
+msgid "Bypass listed devices"
+msgstr "列表内设备直连"
+
+msgid "Proxy listed devices only"
+msgstr "仅列表内设备走代理"
+
+msgid "-- Add online device (MAC / IP) --"
+msgstr "-- 从在线设备添加（MAC / IP）--"
+
+msgid "Control which LAN devices use Mihomo by MAC, IPv4, IPv6, or CIDR. Changes take effect the next time MimoGate starts."
+msgstr "按 MAC、IPv4、IPv6 或 CIDR 控制局域网设备是否走 Mihomo（推荐优先选 MAC 可同时覆盖 IPv4/IPv6）。保存后下次启动 MimoGate 时生效。"
+
+msgid "Unable to read access control settings."
+msgstr "无法读取访问控制设置。"
+
+msgid "Unable to save access control settings."
+msgstr "无法保存访问控制设置。"
+
+msgid "Could not read access control settings."
+msgstr "无法读取访问控制设置。"
+
+msgid "Invalid access control mode."
+msgstr "无效的访问控制模式。"
+
+msgid "Access control list is invalid or too long."
+msgstr "访问控制列表无效或过长。"
+
+msgid "Could not save access control settings."
+msgstr "无法保存访问控制设置。"

@@ -9,6 +9,7 @@ const init = '/etc/init.d/mimogate';
 const directory = '/etc/mimogate';
 const config = directory + '/config.yaml';
 const portsFile = directory + '/proxy-ports';
+const aclFile = directory + '/access-control';
 const cnCache = directory + '/cn.nft';
 const defaultPortsFile = '/usr/share/mimogate/proxy-ports.default';
 const template = '/usr/share/mimogate/config.default.yaml';
@@ -188,6 +189,38 @@ function applyPorts(args, reply) {
 	});
 }
 
+function readAcl(_, reply) {
+	if (fs.stat(aclFile) == null)
+		return reply({ ok: true, mode: 'all', entries: '' });
+
+	const raw = fs.readfile(aclFile, 4200);
+	if (raw == null || length(raw) > 4160)
+		return reply(failure('Could not read access control settings.'));
+
+	const lines = split(trim(raw), '\n', 2);
+	const mode = lines[0];
+	if (index([ 'all', 'bypass', 'proxy' ], mode) < 0)
+		return reply(failure('Could not read access control settings.'));
+
+	reply({ ok: true, mode, entries: trim(lines[1] ?? '') });
+}
+
+function saveAcl(args, reply) {
+	const mode = args.mode;
+	const entries = args.entries ?? '';
+	if (index([ 'all', 'bypass', 'proxy' ], mode) < 0)
+		return reply(failure('Invalid access control mode.'));
+	if (type(entries) != 'string' || length(entries) > 4096 || index(entries, chr(0)) >= 0)
+		return reply(failure('Access control list is invalid or too long.'));
+
+	exec(init, [ 'save_acl', mode, entries ], result => {
+		if (result?.code != 0)
+			return reply(failure('Could not save access control settings.', trim(result?.stderr ?? '')));
+		const lines = split(trim(result.stdout ?? ''), '\n', 2);
+		reply({ ok: true, mode: lines[0] || mode, entries: trim(lines[1] ?? '') });
+	});
+}
+
 function updateCn(_, reply) {
 	exec(init, [ 'update_cn' ], result => {
 		if (result?.code != 0)
@@ -222,6 +255,8 @@ return {
 		boot_status: { call: rootOnly(bootStatus) },
 		read_ports: { call: rootOnly(readPorts) },
 		apply_ports: { args: { ports: '' }, call: rootOnly(applyPorts) },
+		read_acl: { call: rootOnly(readAcl) },
+		save_acl: { args: { mode: '', entries: '' }, call: rootOnly(saveAcl) },
 		update_cn: { call: rootOnly(updateCn) },
 		read_config: { args: { defaults: false }, call: rootOnly(readConfig) },
 		check_config: { args: { content: '' }, call: rootOnly((args, reply) => validateInput(args, reply, false)) },
