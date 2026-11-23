@@ -342,3 +342,6 @@ msgstr "显示/隐藏密码"
 
 msgid "Saved. Enable the proxy switch on the Settings page to start the service."
 msgstr "已保存。代理开关当前未开启，请在设置页启用以启动服务。"
+
+msgid "Enable IPv6 handling in Mihomo and the firewall. When disabled, IPv6 traffic bypasses Mihomo."
+msgstr "启用 Mihomo 与防火墙的 IPv6 流量接管；关闭后 IPv6 流量直接绕过代理。"

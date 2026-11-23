@@ -431,7 +431,11 @@ return view.extend({
 				E('div', { 'class': 'cbi-value-description' },
 					_('Rejects proxied QUIC (UDP 80/443) so applications fall back to TCP immediately. Direct traffic is unaffected.'))
 			]),
-			row(_('IPv6 support'), ipv6Box),
+			row(_('IPv6 support'), [
+				ipv6Box,
+				E('div', { 'class': 'cbi-value-description' },
+					_('Enable IPv6 handling in Mihomo and the firewall. When disabled, IPv6 traffic bypasses Mihomo.'))
+			]),
 			row(_('Mainland China IP'), [
 				E('div', { 'style': 'display:flex; align-items:center; gap:.75em; flex-wrap:wrap' }, [ cnStateEl, updateCnBtn ]),
 				E('div', { 'class': 'cbi-value-description' },
