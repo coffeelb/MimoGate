@@ -18,7 +18,8 @@
     "read": {
       "cgi-io": [ "download" ],
       "file": {
-        "/var/log/mimogate/mimogate.log": [ "read" ]
+        "/var/log/mimogate/mimogate.log": [ "read" ],
+        "/var/log/mimogate/mihomo.log": [ "read" ]
       }
     }
   }

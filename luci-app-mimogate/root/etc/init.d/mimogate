@@ -29,7 +29,7 @@ esac
 START=99
 STOP=10
 USE_PROCD=1
-EXTRA_COMMANDS="clear_log apply_ports save_acl save_settings stop_routing wan_online update_cn"
+EXTRA_COMMANDS="clear_log clear_mihomo_log apply_ports save_acl save_settings stop_routing wan_online update_cn"
 
 CORE=/usr/bin/mihomo
 WORKDIR=/etc/mimogate
@@ -41,6 +41,7 @@ PANEL_UI_URL=https://github.com/Zephyruso/zashboard/releases/download/v3.30.0/di
 DEFAULT_PORTS_CONFIG=/usr/share/mimogate/proxy-ports.default
 LOG_DIR=/var/log/mimogate
 LOG_FILE="$LOG_DIR/mimogate.log"
+MIHOMO_LOG_FILE="$LOG_DIR/mihomo.log"
 DNS_PORT=1053
 DIRECT_DNS4=223.5.5.5
 DNSMASQ_INIT=/etc/init.d/dnsmasq
@@ -60,11 +61,15 @@ CN_URL=https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip
 
 prepare_log() (
 	umask 077
-	mkdir -p "$LOG_DIR" && : >> "$LOG_FILE"
+	mkdir -p "$LOG_DIR" && : >> "$LOG_FILE" && : >> "$MIHOMO_LOG_FILE"
 )
 
 clear_log() {
 	prepare_log && : > "$LOG_FILE"
+}
+
+clear_mihomo_log() {
+	prepare_log && : > "$MIHOMO_LOG_FILE"
 }
 
 log_ports() {
@@ -708,7 +713,7 @@ start_service() {
 	# Set up TUN IPv6 even if WAN IPv6 is still coming up.
 	procd_set_param env SKIP_SYSTEM_IPV6_CHECK=1
 	procd_set_param command /bin/sh -c 'log="$1"; shift; exec >> "$log" 2>&1; exec "$@"' \
-		mimogate "$LOG_FILE" "$CORE" -d "$WORKDIR" -f "$RUNTIME_CONFIG" \
+		mimogate "$MIHOMO_LOG_FILE" "$CORE" -d "$WORKDIR" -f "$RUNTIME_CONFIG" \
 		-post-up "$ROUTING_UP" -post-down "$ROUTING_DOWN"
 	procd_set_param respawn 3600 5 3
 	procd_set_param term_timeout 8
@@ -717,9 +722,11 @@ start_service() {
 	procd_open_instance log_maintenance
 	procd_set_param command /bin/sh -c '
 		while sleep 180; do
-			[ "$(wc -c < "$1")" -lt 65536 ] || : > "$1"
+			for f in "$1" "$2"; do
+				[ -f "$f" ] && [ "$(wc -c < "$f")" -ge 65536 ] && : > "$f"
+			done
 		done
-	' mimogate-log "$LOG_FILE"
+	' mimogate-log "$LOG_FILE" "$MIHOMO_LOG_FILE"
 	procd_set_param respawn 3600 5 3
 	procd_close_instance
 	start_failed=

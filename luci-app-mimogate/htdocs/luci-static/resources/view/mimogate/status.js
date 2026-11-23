@@ -10,7 +10,8 @@
 'require view';
 
 const POLL_INTERVAL = 5;
-const LOG_FILE = '/var/log/mimogate/mimogate.log';
+const MIMOGATE_LOG_FILE = '/var/log/mimogate/mimogate.log';
+const MIHOMO_LOG_FILE = '/var/log/mimogate/mihomo.log';
 const LOG_CONTROL_RE = /\x1b\[[0-9;]*m|[\x00-\x08\x0b-\x1f\x7f]/g;
 
 const checkConn = rpc.declare({
@@ -34,9 +35,9 @@ const STATUS_CSS = `
 html[data-darkmode="true"] .mimogate-conn-status.muted { color: #9ca3af; }
 `;
 
-async function getLog() {
+async function readLogFile(path) {
 	try {
-		const text = await fs.read_direct(LOG_FILE, 'text');
+		const text = await fs.read_direct(path, 'text');
 		return text.replace(LOG_CONTROL_RE, '').trimEnd();
 	}
 	catch (error) {
@@ -53,61 +54,86 @@ return view.extend({
 	handleReset: null,
 
 	render() {
-		const logErrorEl = E('p', { 'role': 'status' });
-		const logEl = E('textarea', {
-			'class': 'cbi-input-textarea',
-			'readonly': 'readonly',
-			'wrap': 'off',
-			'rows': 22,
-			'style': 'width:100%; font-family:monospace; font-size:12px'
-		});
-
-		const renderLog = (text) => {
-			const nextText = text || _('No log entries yet.');
-			if (logEl.value === nextText)
-				return;
-
-			const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 20;
-			logEl.value = nextText;
-			if (atBottom)
-				logEl.scrollTop = logEl.scrollHeight;
-		};
-
-		let logRequest;
-		const syncLog = () => {
-			if (logRequest)
-				return logRequest;
-
-			const request = getLog().then(text => {
-				if (logRequest === request) {
-					dom.content(logErrorEl, '');
-					renderLog(text);
-				}
-			}).catch(error => {
-				if (logRequest === request) {
-					const message = _('Unable to read the log.');
-					dom.content(logErrorEl, error.message ? message + ' ' + error.message : message);
-				}
-			}).finally(() => {
-				if (logRequest === request)
-					logRequest = null;
+		const createLogSection = (title, filePath, clearAction) => {
+			const errorEl = E('p', { 'role': 'status' });
+			const textareaEl = E('textarea', {
+				'class': 'cbi-input-textarea',
+				'readonly': 'readonly',
+				'wrap': 'off',
+				'rows': 12,
+				'style': 'width:100%; font-family:monospace; font-size:12px'
 			});
-			logRequest = request;
-			return request;
+
+			const renderText = (text) => {
+				const nextText = text || _('No log entries yet.');
+				if (textareaEl.value === nextText)
+					return;
+
+				const atBottom = textareaEl.scrollHeight - textareaEl.scrollTop - textareaEl.clientHeight < 20;
+				textareaEl.value = nextText;
+				if (atBottom)
+					textareaEl.scrollTop = textareaEl.scrollHeight;
+			};
+
+			let pending;
+			const sync = () => {
+				if (pending)
+					return pending;
+
+				const request = readLogFile(filePath).then(text => {
+					if (pending === request) {
+						dom.content(errorEl, '');
+						renderText(text);
+					}
+				}).catch(error => {
+					if (pending === request) {
+						const message = _('Unable to read the log.');
+						dom.content(errorEl, error.message ? message + ' ' + error.message : message);
+					}
+				}).finally(() => {
+					if (pending === request)
+						pending = null;
+				});
+				pending = request;
+				return request;
+			};
+
+			const clearBtn = E('button', {
+				'type': 'button',
+				'class': 'btn cbi-button cbi-button-negative',
+				'click': ui.createHandlerFn(this, async () => {
+					try {
+						const res = await serviceAction(clearAction);
+						if (!res?.ok)
+							throw new Error([ res?.message ? _(res.message) : _('Service action failed.'), res?.detail ].filter(Boolean).join('\n'));
+						pending = null;
+						await sync();
+					}
+					catch (e) {
+						ui.addNotification(null, E('p', e.message), 'danger');
+					}
+				})
+			}, _('Clear log'));
+
+			const section = E('div', { 'class': 'cbi-section' }, [
+				E('div', { 'style': 'display:flex; align-items:center; justify-content:space-between; gap:.5em; margin-bottom:.5em' }, [
+					E('h3', { 'style': 'margin:0' }, title),
+					clearBtn
+				]),
+				errorEl,
+				textareaEl
+			]);
+
+			return { section, sync };
 		};
 
-		const clear = ui.createHandlerFn(this, async () => {
-			try {
-				const res = await serviceAction('clear_log');
-				if (!res?.ok)
-					throw new Error([ res?.message ? _(res.message) : _('Service action failed.'), res?.detail ].filter(Boolean).join('\n'));
-				logRequest = null;
-				await syncLog();
-			}
-			catch (e) {
-				ui.addNotification(null, E('p', e.message), 'danger');
-			}
-		});
+		const mimogateLog = createLogSection(_('MimoGate log'), MIMOGATE_LOG_FILE, 'clear_log');
+		const mihomoLog = createLogSection(_('Mihomo log'), MIHOMO_LOG_FILE, 'clear_mihomo_log');
+
+		const syncAllLogs = () => Promise.all([
+			mimogateLog.sync(),
+			mihomoLog.sync()
+		]);
 
 		const connRow = (label, site) => {
 			const statusEl = E('strong', { 'class': 'mimogate-conn-status muted' }, _('unchecked'));
@@ -136,8 +162,8 @@ return view.extend({
 			]);
 		};
 
-		window.setTimeout(() => syncLog(), 0);
-		poll.add(() => document.hidden ? Promise.resolve() : syncLog(), POLL_INTERVAL);
+		window.setTimeout(() => syncAllLogs(), 0);
+		poll.add(() => document.hidden ? Promise.resolve() : syncAllLogs(), POLL_INTERVAL);
 
 		return E('div', { 'class': 'cbi-map' }, [
 			E('style', [ STATUS_CSS ]),
@@ -148,16 +174,10 @@ return view.extend({
 					connRow(_('Google'), 'google')
 				])
 			]),
-			E('div', { 'class': 'cbi-section' }, [
-				E('div', { 'style': 'display:flex; align-items:center; justify-content:space-between; gap:.5em; margin-bottom:.5em' }, [
-					E('h3', { 'style': 'margin:0' }, _('Runtime log')),
-					E('button', { 'type': 'button', 'class': 'btn cbi-button cbi-button-negative', 'click': clear }, _('Clear log'))
-				]),
-				logErrorEl,
-				logEl,
-				E('div', { 'style': 'text-align:right; margin-top:.25em' },
-					E('small', {}, _('Refresh every %d seconds.').format(POLL_INTERVAL)))
-			])
+			mimogateLog.section,
+			mihomoLog.section,
+			E('div', { 'style': 'text-align:right; margin-top:.25em' },
+				E('small', {}, _('Refresh every %d seconds.').format(POLL_INTERVAL)))
 		]);
 	}
 });

@@ -369,7 +369,7 @@ function updateCn(_, reply) {
 
 function serviceAction(args, reply) {
 	const action = args.action;
-	if (index([ 'start', 'stop', 'restart', 'enable', 'disable', 'clear_log' ], action) < 0)
+	if (index([ 'start', 'stop', 'restart', 'enable', 'disable', 'clear_log', 'clear_mihomo_log' ], action) < 0)
 		return reply(failure('Invalid service action.'));
 
 	const run = () => exec(init, [ action ], result => {

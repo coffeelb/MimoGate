@@ -250,8 +250,11 @@ msgstr "通过"
 msgid "failed"
 msgstr "失败"
 
-msgid "Runtime log"
-msgstr "运行日志"
+msgid "MimoGate log"
+msgstr "MimoGate 日志"
+
+msgid "Mihomo log"
+msgstr "Mihomo 日志"
 
 msgid "Refresh every %d seconds."
 msgstr "每 %d 秒刷新一次。"
