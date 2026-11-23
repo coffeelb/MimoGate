@@ -13,17 +13,8 @@ msgstr "清空日志"
 msgid "Configuration is valid."
 msgstr "配置有效。"
 
-msgid "Configuration"
-msgstr "配置"
-
-msgid "Control"
-msgstr "操作"
-
 msgid "Edit the Mihomo YAML configuration directly. It is validated with \"mihomo -t\" before it is saved."
 msgstr "直接编辑 Mihomo 的 YAML 配置。保存前会通过“mihomo -t”校验。"
-
-msgid "Log"
-msgstr "日志"
 
 msgid "No log entries yet."
 msgstr "暂无日志。"
@@ -33,9 +24,6 @@ msgstr "未找到"
 
 msgid "Not saved: the configuration is invalid."
 msgstr "配置无效，未保存。"
-
-msgid "Restart"
-msgstr "重启"
 
 msgid "Running"
 msgstr "运行中"
@@ -54,24 +42,6 @@ msgstr "已保存。重启服务后应用更改。"
 
 msgid "Saved. The service was restarted."
 msgstr "已保存，服务已重启。"
-
-msgid "Service"
-msgstr "服务"
-
-msgid "MimoGate configuration"
-msgstr "MimoGate 配置"
-
-msgid "Start on boot"
-msgstr "开机自启"
-
-msgid "Start"
-msgstr "启动"
-
-msgid "Status"
-msgstr "状态"
-
-msgid "Stop"
-msgstr "停止"
 
 msgid "Stopped"
 msgstr "未运行"
@@ -100,20 +70,8 @@ msgstr "请求失败。"
 msgid "The configuration exceeds the web editor size limit."
 msgstr "配置超出网页传输上限。"
 
-msgid "Apply"
-msgstr "应用"
-
-msgid "Firewall port bypass"
-msgstr "防火墙端口绕过"
-
 msgid "Intercepted ports"
 msgstr "接管端口"
-
-msgid "Port bypass applied."
-msgstr "端口绕过已应用。"
-
-msgid "Saved. Takes effect the next time MimoGate starts."
-msgstr "已保存，下次启动 MimoGate 时生效。"
 
 msgid "TCP and UDP destination ports outside this list bypass Mihomo. Separate ports with commas (,)."
 msgstr "名单外的 TCP 和 UDP 目标端口绕过 Mihomo。请用英文逗号（,）分隔端口。"
