@@ -115,13 +115,17 @@ return view.extend({
 				})
 			}, _('Clear log'));
 
-			const section = E('div', { 'class': 'cbi-section' }, [
-				E('div', { 'style': 'display:flex; align-items:center; justify-content:space-between; gap:.5em; margin-bottom:.5em' }, [
-					E('h3', { 'style': 'margin:0' }, title),
+			const section = E('div', { 'class': 'cbi-map', 'style': 'margin-top: 1.5em' }, [
+				E('h3', { 'style': 'align-items: center; display: flex; gap: .5em' }, [
+					title,
 					clearBtn
 				]),
-				errorEl,
-				textareaEl
+				E('div', { 'class': 'cbi-section' }, [
+					errorEl,
+					textareaEl,
+					E('div', { 'style': 'text-align:right; margin-top:.25em' },
+						E('small', {}, _('Refresh every %d seconds.').format(POLL_INTERVAL)))
+				])
 			]);
 
 			return { section, sync };
@@ -175,9 +179,7 @@ return view.extend({
 				])
 			]),
 			mimogateLog.section,
-			mihomoLog.section,
-			E('div', { 'style': 'text-align:right; margin-top:.25em' },
-				E('small', {}, _('Refresh every %d seconds.').format(POLL_INTERVAL)))
+			mihomoLog.section
 		]);
 	}
 });
