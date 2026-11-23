@@ -89,7 +89,7 @@ msgid "Cached"
 msgstr "缓存"
 
 msgid "Bundled snapshot"
-msgstr "内置快照"
+msgstr "初始数据"
 
 msgid "Update list"
 msgstr "更新列表"

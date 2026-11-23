@@ -435,7 +435,7 @@ return view.extend({
 					_('Enable IPv6 handling in Mihomo and the firewall. When disabled, IPv6 traffic bypasses Mihomo.'))
 			]),
 			row(_('Mainland China IP'), [
-				E('div', { 'style': 'display:flex; align-items:center; gap:.75em; flex-wrap:wrap' }, [ cnStateEl, updateCnBtn ]),
+				E('div', { 'style': 'display:flex; align-items:center; gap:.75em; flex-wrap:wrap' }, [ updateCnBtn, cnStateEl ]),
 				E('div', { 'class': 'cbi-value-description' },
 					_('Updates are saved to cache and take effect the next time MimoGate starts.'))
 			])
