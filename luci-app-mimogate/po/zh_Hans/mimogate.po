@@ -274,12 +274,6 @@ msgstr "保存并应用"
 msgid "Reset"
 msgstr "复位"
 
-msgid "Saved and applied."
-msgstr "已保存并应用。"
-
-msgid "Saved. Service stopped."
-msgstr "已保存，服务已停止。"
-
 msgid "Saved. Restart MimoGate to apply changes."
 msgstr "已保存，重启 MimoGate 后生效。"
 
@@ -357,3 +351,6 @@ msgstr "正在应用配置更改"
 
 msgid "Waiting for changes to be applied..."
 msgstr "正在等待配置被应用..."
+
+msgid "Configuration changes have been applied."
+msgstr "配置更改已应用。"

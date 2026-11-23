@@ -141,6 +141,10 @@ return view.extend({
 				}
 
 				showResult(true, _('Saved. The service was restarted.'));
+				ui.showModal(_('Applying configuration changes'), [
+					E('p', {}, _('Configuration changes have been applied.'))
+				]);
+				await new Promise((resolve) => window.setTimeout(resolve, 1000));
 			}
 			finally {
 				if (restart)

@@ -363,9 +363,10 @@ return view.extend({
 				await runInit(wantEnabled ? 'restart' : 'stop');
 				await new Promise((resolve) => window.setTimeout(resolve, wantEnabled ? 1200 : 600));
 				await syncStatus();
-				ui.addNotification(null, E('p', wantEnabled
-					? _('Saved and applied.')
-					: _('Saved. Service stopped.')), 'info');
+				ui.showModal(_('Applying configuration changes'), [
+					E('p', {}, _('Configuration changes have been applied.'))
+				]);
+				await new Promise((resolve) => window.setTimeout(resolve, 1000));
 			}
 			catch (e) {
 				ui.addNotification(null, E('p', e.message), 'danger');
