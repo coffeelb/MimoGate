@@ -53,7 +53,7 @@ dns:
 sniffer:
   enable: true
   parse-pure-ip: true
-  override-destination: false
+  override-destination: true
   sniff:
     HTTP:
       ports: [80]
