@@ -19,6 +19,9 @@ const saveConfig = rpc.declare({
 const serviceAction = rpc.declare({
 	object: 'mimogate', method: 'service_action', params: [ 'action' ], reject: true
 });
+const getStatus = rpc.declare({
+	object: 'mimogate', method: 'status', reject: true
+});
 
 function editorText(value) {
 	const text = value.replace(/\r\n/g, '\n');
@@ -116,6 +119,13 @@ return view.extend({
 			}
 
 			try {
+				const st = await getStatus();
+				if (!st?.ok)
+					throw new Error(errorText(st));
+				if (!st.running) {
+					showResult(true, _('Saved. Enable the proxy switch on the Settings page to start the service.'));
+					return;
+				}
 				const result = await serviceAction('restart');
 				if (!result?.ok)
 					throw new Error(errorText(result));

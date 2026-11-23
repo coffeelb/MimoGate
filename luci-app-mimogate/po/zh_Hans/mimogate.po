@@ -381,3 +381,6 @@ msgstr "路由端口"
 
 msgid "Reveal/hide password"
 msgstr "显示/隐藏密码"
+
+msgid "Saved. Enable the proxy switch on the Settings page to start the service."
+msgstr "已保存。代理开关当前未开启，请在设置页启用以启动服务。"
