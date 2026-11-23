@@ -54,7 +54,7 @@ return view.extend({
 			'rows': 30,
 			'wrap': 'off',
 			'spellcheck': 'false',
-			'style': 'width:100%; font-family:monospace; font-size:13px; tab-size:2'
+			'style': 'width:100%; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; line-height:1.45; tab-size:2'
 		});
 		editor.value = result?.ok ? result.content : '';
 
@@ -142,17 +142,19 @@ return view.extend({
 			E('div', { 'class': 'cbi-map-descr' },
 				_('Edit the Mihomo YAML configuration directly. It is validated with "mihomo -t" before it is saved.')),
 			E('div', { 'class': 'cbi-section' }, [
-				editor,
-				output,
-				E('div', { 'class': 'cbi-page-actions' }, [
-					E('button', { 'type': 'button', 'class': 'btn cbi-button', 'click': restoreDefaults }, _('Restore defaults')),
-					' ',
-					E('button', { 'type': 'button', 'class': 'btn cbi-button cbi-button-action', 'click': check }, _('Check')),
-					' ',
-					E('button', { 'type': 'button', 'class': 'btn cbi-button cbi-button-save', 'click': save(false) }, _('Save')),
-					' ',
-					E('button', { 'type': 'button', 'class': 'btn cbi-button cbi-button-positive', 'click': save(true) }, _('Save and restart'))
+				E('div', { 'class': 'cbi-section-node', 'style': 'padding: 1em' }, [
+					editor,
+					output
 				])
+			]),
+			E('div', { 'class': 'cbi-page-actions' }, [
+				E('button', { 'type': 'button', 'class': 'btn cbi-button', 'click': restoreDefaults }, _('Restore defaults')),
+				' ',
+				E('button', { 'type': 'button', 'class': 'btn cbi-button cbi-button-action', 'click': check }, _('Check')),
+				' ',
+				E('button', { 'type': 'button', 'class': 'btn cbi-button cbi-button-save', 'click': save(false) }, _('Save')),
+				' ',
+				E('button', { 'type': 'button', 'class': 'btn cbi-button cbi-button-positive', 'click': save(true) }, _('Save and restart'))
 			])
 		]);
 	}

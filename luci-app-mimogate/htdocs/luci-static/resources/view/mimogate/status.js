@@ -28,11 +28,21 @@ const serviceAction = rpc.declare({
 });
 
 const STATUS_CSS = `
-.mimogate-conn-status { font-weight: bold; margin-left: .5em; }
-.mimogate-conn-status.success { color: #16a34a; }
-.mimogate-conn-status.danger { color: #dc2626; }
-.mimogate-conn-status.muted { color: #6b7280; }
-html[data-darkmode="true"] .mimogate-conn-status.muted { color: #9ca3af; }
+.mimogate-conn-status {
+	display: inline-block;
+	margin-left: .6em;
+	padding: 2px 10px;
+	border-radius: 999px;
+	font-size: 12px;
+	font-weight: 600;
+	vertical-align: middle;
+}
+.mimogate-conn-status.success { color: #15803d; background: rgba(22, 163, 74, .12); }
+.mimogate-conn-status.danger { color: #b91c1c; background: rgba(220, 38, 38, .12); }
+.mimogate-conn-status.muted { color: #6b7280; background: rgba(107, 114, 128, .12); }
+html[data-darkmode="true"] .mimogate-conn-status.success { color: #4ade80; background: rgba(74, 222, 128, .15); }
+html[data-darkmode="true"] .mimogate-conn-status.danger { color: #f87171; background: rgba(248, 113, 113, .15); }
+html[data-darkmode="true"] .mimogate-conn-status.muted { color: #9ca3af; background: rgba(156, 163, 175, .15); }
 `;
 
 async function readLogFile(path) {
@@ -61,7 +71,7 @@ return view.extend({
 				'readonly': 'readonly',
 				'wrap': 'off',
 				'rows': 12,
-				'style': 'width:100%; font-family:monospace; font-size:12px'
+				'style': 'width:100%; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; line-height:1.45'
 			});
 
 			const renderText = (text) => {
@@ -140,22 +150,27 @@ return view.extend({
 		]);
 
 		const connRow = (label, site) => {
-			const statusEl = E('strong', { 'class': 'mimogate-conn-status muted' }, _('unchecked'));
+			const statusEl = E('span', { 'class': 'mimogate-conn-status muted' }, _('unchecked'));
 			const btn = E('button', {
 				'type': 'button',
 				'class': 'btn cbi-button cbi-button-action',
 				'click': ui.createHandlerFn(this, async () => {
+					btn.disabled = true;
+					statusEl.className = 'mimogate-conn-status muted';
+					dom.content(statusEl, _('Checking...'));
 					try {
 						const res = await checkConn(site);
 						if (!res?.ok)
 							throw new Error(res?.message ? _(res.message) : _('failed'));
-						const latency = res.ms != null ? ' · %d ms'.format(res.ms) : '';
 						statusEl.className = 'mimogate-conn-status ' + (res.result ? 'success' : 'danger');
-						dom.content(statusEl, (res.result ? _('passed') : _('failed')) + latency);
+						dom.content(statusEl, res.result ? _('passed') : _('failed'));
 					}
 					catch (e) {
 						statusEl.className = 'mimogate-conn-status danger';
 						dom.content(statusEl, _('failed'));
+					}
+					finally {
+						btn.disabled = false;
 					}
 				})
 			}, _('Check'));
