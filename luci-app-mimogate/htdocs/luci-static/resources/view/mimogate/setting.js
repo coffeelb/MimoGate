@@ -90,14 +90,6 @@ function formatShortMtime(epoch) {
 	return '%s-%s %s:%s'.format(pad(d.getMonth() + 1), pad(d.getDate()), pad(d.getHours()), pad(d.getMinutes()));
 }
 
-function aclModeLabel(mode) {
-	if (mode === 'bypass')
-		return _('Bypass listed devices');
-	if (mode === 'proxy')
-		return _('Proxy listed devices only');
-	return _('All LAN devices');
-}
-
 function shortVersion(raw) {
 	const line = (raw || '').split('\n')[0].trim();
 	if (!line)
@@ -125,7 +117,6 @@ return view.extend({
 	render() {
 		const barStateEl = E('div', { 'class': 'v' }, '—');
 		const barPanelEl = E('div', { 'class': 'v' }, '—');
-		const barAclEl = E('div', { 'class': 'v' }, '—');
 		const barCnEl = E('div', { 'class': 'v' }, '—');
 		const barVerEl = E('div', { 'class': 'v' }, '—');
 		const cnStateEl = E('span', {}, '—');
@@ -356,7 +347,6 @@ return view.extend({
 				aclInput.value = aclRes.entries;
 				saved.aclMode = aclRes.mode;
 				saved.aclEntries = aclRes.entries;
-				dom.content(barAclEl, aclModeLabel(aclRes.mode));
 
 				const wantEnabled = enableBox.checked;
 				await runInit(wantEnabled ? 'enable' : 'disable');
@@ -535,10 +525,8 @@ return view.extend({
 					saved.aclEntries = aclRes.entries;
 					aclMode.value = saved.aclMode;
 					aclInput.value = saved.aclEntries;
-					dom.content(barAclEl, aclModeLabel(saved.aclMode));
 				}
 				else if (aclRes != null) {
-					dom.content(barAclEl, _('Unknown'));
 					ui.addNotification(null, E('p', rpcError(aclRes, _('Unable to read access control settings.'))), 'danger');
 				}
 				ready = true;
@@ -558,7 +546,6 @@ return view.extend({
 					E('div', { 'class': 'mimogate-status-bar' }, [
 						statusItem(_('Running status'), barStateEl),
 						statusItem(_('Panel'), barPanelEl),
-						statusItem(_('Access control'), barAclEl),
 						statusItem(_('Mainland China IP'), barCnEl),
 						statusItem(_('Mihomo version'), barVerEl)
 					])
