@@ -40,6 +40,8 @@ DEFAULT_PORTS_CONFIG=/usr/share/mimogate/proxy-ports.default
 LOG_DIR=/var/log/mimogate
 LOG_FILE="$LOG_DIR/mimogate.log"
 DNS_PORT=1053
+DIRECT_DNS4=223.5.5.5
+DIRECT_DNS6=2400:3200::1
 DNSMASQ_INIT=/etc/init.d/dnsmasq
 DNSMASQ_STATE=/var/run/mimogate-dnsmasq
 TUN_DEVICE=mimogate0
@@ -395,6 +397,47 @@ install_routing() (
 		esac
 		cat <<-EOF
 				}
+		EOF
+		if [ "$acl_mode" = bypass ] && [ -n "$acl_sets" ]; then
+			cat <<-EOF
+				chain dns_bypass {
+					type nat hook prerouting priority dstnat - 5; policy accept;
+					iifname != "$lan" return
+					fib daddr type != local return
+					meta l4proto != { tcp, udp } return
+					th dport != 53 return
+			EOF
+			case "$acl_sets" in *'set acl_mac '*)
+				printf '\t\tether saddr @acl_mac meta nfproto ipv4 dnat ip to %s\n' "$DIRECT_DNS4"
+				printf '\t\tether saddr @acl_mac meta nfproto ipv6 dnat ip6 to %s\n' "$DIRECT_DNS6"
+				;;
+			esac
+			case "$acl_sets" in *'set acl_ip4 '*)
+				printf '\t\tip saddr @acl_ip4 dnat ip to %s\n' "$DIRECT_DNS4"
+				;;
+			esac
+			case "$acl_sets" in *'set acl_ip6 '*)
+				printf '\t\tip6 saddr @acl_ip6 dnat ip6 to %s\n' "$DIRECT_DNS6"
+				;;
+			esac
+			printf '\t}\n'
+		elif [ "$acl_mode" = proxy ]; then
+			cat <<-EOF
+				chain dns_bypass {
+					type nat hook prerouting priority dstnat - 5; policy accept;
+					iifname != "$lan" return
+					fib daddr type != local return
+					meta l4proto != { tcp, udp } return
+					th dport != 53 return
+			EOF
+			case "$acl_sets" in *'set acl_mac '*) printf '\t\tether saddr @acl_mac return\n' ;; esac
+			case "$acl_sets" in *'set acl_ip4 '*) printf '\t\tip saddr @acl_ip4 return\n' ;; esac
+			case "$acl_sets" in *'set acl_ip6 '*) printf '\t\tip6 saddr @acl_ip6 return\n' ;; esac
+			printf '\t\tmeta nfproto ipv4 dnat ip to %s\n' "$DIRECT_DNS4"
+			printf '\t\tmeta nfproto ipv6 dnat ip6 to %s\n' "$DIRECT_DNS6"
+			printf '\t}\n'
+		fi
+		cat <<-EOF
 				chain output {
 					type route hook output priority mangle; policy accept;
 					meta mark & $CORE_MARK != 0 return

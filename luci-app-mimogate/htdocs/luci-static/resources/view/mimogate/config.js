@@ -128,7 +128,7 @@ return view.extend({
 		});
 
 		return E('div', { 'class': 'cbi-map' }, [
-			E('h2', _('MimoGate configuration')),
+			E('h3', _('MimoGate configuration management')),
 			E('div', { 'class': 'cbi-map-descr' },
 				_('Edit the Mihomo YAML configuration directly. It is validated with "mihomo -t" before it is saved.')),
 			E('div', { 'class': 'cbi-section' }, [

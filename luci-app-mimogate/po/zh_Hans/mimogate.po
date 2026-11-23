@@ -246,3 +246,78 @@ msgstr "访问控制列表无效或过长。"
 
 msgid "Could not save access control settings."
 msgstr "无法保存访问控制设置。"
+
+msgid "Settings"
+msgstr "设置"
+
+msgid "Configuration management"
+msgstr "配置管理"
+
+msgid "MimoGate configuration management"
+msgstr "MimoGate 配置管理"
+
+msgid "Service status"
+msgstr "服务状态"
+
+msgid "General"
+msgstr "常规设置"
+
+msgid "Running status"
+msgstr "运行状态"
+
+msgid "Access control mode"
+msgstr "访问控制模式"
+
+msgid "Add online device"
+msgstr "从在线设备添加"
+
+msgid "Device list"
+msgstr "设备列表"
+
+msgid "Connection check"
+msgstr "连通性测试"
+
+msgid "Baidu"
+msgstr "百度"
+
+msgid "Google"
+msgstr "Google"
+
+msgid "unchecked"
+msgstr "未测试"
+
+msgid "passed"
+msgstr "通过"
+
+msgid "failed"
+msgstr "失败"
+
+msgid "Runtime log"
+msgstr "运行日志"
+
+msgid "Refresh every %d seconds."
+msgstr "每 %d 秒刷新一次。"
+
+msgid "Invalid test target."
+msgstr "无效的测试目标。"
+
+msgid "Enable"
+msgstr "启用"
+
+msgid "Enable MimoGate and start on boot. Uncheck and click Save & Apply to stop the service."
+msgstr "启用 MimoGate 并随开机自启。取消勾选后点击「保存并应用」将停止服务。"
+
+msgid "Save & Apply"
+msgstr "保存并应用"
+
+msgid "Reset"
+msgstr "复位"
+
+msgid "Saved and applied."
+msgstr "已保存并应用。"
+
+msgid "Saved. Service stopped."
+msgstr "已保存，服务已停止。"
+
+msgid "Saved. Restart MimoGate to apply changes."
+msgstr "已保存，重启 MimoGate 后生效。"

@@ -221,6 +221,24 @@ function saveAcl(args, reply) {
 	});
 }
 
+function connectionCheck(args, reply) {
+	const urls = {
+		baidu: 'https://www.baidu.com',
+		google: 'https://www.google.com/generate_204'
+	};
+	const url = urls[args.site];
+	if (!url)
+		return reply(failure('Invalid test target.'));
+
+	const fetchBin = fs.access('/bin/uclient-fetch', 'x') ? '/bin/uclient-fetch' : '/usr/bin/uclient-fetch';
+	const started = clock(true);
+	exec(fetchBin, [ '-q', '-T', '5', '-O', '/dev/null', url ], result => {
+		const finished = clock(true);
+		const ms = int(((finished[0] - started[0]) * 1000) + ((finished[1] - started[1]) / 1000000));
+		reply({ ok: true, result: result?.code == 0, ms: ms >= 0 ? ms : 0 });
+	});
+}
+
 function updateCn(_, reply) {
 	exec(init, [ 'update_cn' ], result => {
 		if (result?.code != 0)
@@ -257,6 +275,7 @@ return {
 		apply_ports: { args: { ports: '' }, call: rootOnly(applyPorts) },
 		read_acl: { call: rootOnly(readAcl) },
 		save_acl: { args: { mode: '', entries: '' }, call: rootOnly(saveAcl) },
+		connection_check: { args: { site: '' }, call: rootOnly(connectionCheck) },
 		update_cn: { call: rootOnly(updateCn) },
 		read_config: { args: { defaults: false }, call: rootOnly(readConfig) },
 		check_config: { args: { content: '' }, call: rootOnly((args, reply) => validateInput(args, reply, false)) },
