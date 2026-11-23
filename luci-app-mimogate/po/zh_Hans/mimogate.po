@@ -321,3 +321,63 @@ msgstr "已保存，服务已停止。"
 
 msgid "Saved. Restart MimoGate to apply changes."
 msgstr "已保存，重启 MimoGate 后生效。"
+
+msgid "Panel"
+msgstr "面板"
+
+msgid "Enabled"
+msgstr "已启用"
+
+msgid "Disabled"
+msgstr "已禁用"
+
+msgid "Enable panel"
+msgstr "启用面板"
+
+msgid "Enables the Mihomo API and Zashboard web UI. The dashboard is downloaded on first use."
+msgstr "启用 Mihomo API 与 Zashboard 网页控制台，首次使用时自动下载面板资源。"
+
+msgid "Panel port"
+msgstr "面板端口"
+
+msgid "Panel secret"
+msgstr "面板密钥"
+
+msgid "Used to authenticate panel API access. It is recommended to set a custom secret instead of the default."
+msgstr "用于验证面板 API 访问，建议修改为自定义密钥。"
+
+msgid "Open Panel"
+msgstr "打开面板"
+
+msgid "Open Zashboard"
+msgstr "打开 Zashboard 控制台"
+
+msgid "Reject QUIC"
+msgstr "拒绝 QUIC"
+
+msgid "Rejects proxied QUIC (UDP 80/443) so applications fall back to TCP immediately. Direct traffic is unaffected."
+msgstr "拒绝走代理的 QUIC（UDP 80/443）流量，使应用立即回退到 TCP；直连流量不受影响。"
+
+msgid "IPv6 support"
+msgstr "IPv6 支持"
+
+msgid "Could not read settings."
+msgstr "无法读取设置。"
+
+msgid "Unable to save settings."
+msgstr "无法保存设置。"
+
+msgid "Could not save settings."
+msgstr "无法保存设置。"
+
+msgid "Panel port must be between 1 and 65535."
+msgstr "面板端口必须在 1 到 65535 之间。"
+
+msgid "Panel secret is invalid or too long."
+msgstr "面板密钥无效或过长。"
+
+msgid "Routing ports"
+msgstr "路由端口"
+
+msgid "Reveal/hide password"
+msgstr "显示/隐藏密码"

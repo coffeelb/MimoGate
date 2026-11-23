@@ -10,6 +10,7 @@ const directory = '/etc/mimogate';
 const config = directory + '/config.yaml';
 const portsFile = directory + '/proxy-ports';
 const aclFile = directory + '/access-control';
+const settingsFile = directory + '/settings';
 const cnCache = directory + '/cn.nft';
 const defaultPortsFile = '/usr/share/mimogate/proxy-ports.default';
 const template = '/usr/share/mimogate/config.default.yaml';
@@ -221,6 +222,125 @@ function saveAcl(args, reply) {
 	});
 }
 
+function parseYamlScalar(raw) {
+	let s = trim(raw);
+	if (substr(s, 0, 1) == '"' || substr(s, 0, 1) == "'") {
+		const q = substr(s, 0, 1);
+		s = substr(s, 1);
+		const end = index(s, q);
+		if (end >= 0)
+			s = substr(s, 0, end);
+		if (q == '"')
+			s = replace(replace(s, /\\"/g, '"'), /\\\\/g, '\\');
+		return s;
+	}
+	return trim(replace(s, /[ \t]*#.*$/, ''));
+}
+
+function readSettings(_, reply) {
+	const out = {
+		ok: true,
+		panel_enabled: true,
+		panel_port: '9090',
+		panel_secret: '666V888c',
+		quic_reject: true,
+		ipv6_support: true
+	};
+	const setStat = fs.stat(settingsFile);
+	if (setStat != null) {
+		const raw = fs.readfile(settingsFile, 4096);
+		if (raw == null)
+			return reply(failure('Could not read settings.'));
+
+		for (let line in split(raw, '\n')) {
+			const idx = index(line, '=');
+			if (idx <= 0)
+				continue;
+			const k = substr(line, 0, idx);
+			const v = substr(line, idx + 1);
+			if (k == 'panel_enabled')
+				out.panel_enabled = (v != '0');
+			else if (k == 'panel_port' && match(v, /^[0-9]+$/))
+				out.panel_port = v;
+			else if (k == 'panel_secret')
+				out.panel_secret = v;
+			else if (k == 'quic_reject')
+				out.quic_reject = (v != '0');
+			else if (k == 'ipv6_support')
+				out.ipv6_support = (v != '0');
+		}
+	}
+
+	const cfgStat = fs.stat(config);
+	if (cfgStat?.size && (setStat == null || cfgStat.mtime > setStat.mtime)) {
+		const cfgRaw = fs.readfile(config, maxSize);
+		if (cfgRaw != null) {
+			let first = true;
+			let hasController = false;
+			for (let line in split(cfgRaw, '\n')) {
+				line = replace(line, /\r$/, '');
+				if (first) {
+					line = replace(line, /^\xef\xbb\xbf/, '');
+					first = false;
+				}
+				if (match(line, /^ipv6:[ \t]*/)) {
+					const v = lc(parseYamlScalar(substr(line, 5)));
+					if (v == 'true')
+						out.ipv6_support = true;
+					else if (v == 'false')
+						out.ipv6_support = false;
+				}
+				else if (match(line, /^external-controller:[ \t]*/)) {
+					hasController = true;
+					const v = parseYamlScalar(substr(line, 20));
+					if (v == '' || v == 'null' || v == '~') {
+						out.panel_enabled = false;
+					}
+					else {
+						const m = match(v, /:([0-9]+)$/);
+						if (m && int(m[1]) >= 1 && int(m[1]) <= 65535) {
+							out.panel_enabled = true;
+							out.panel_port = m[1];
+						}
+					}
+				}
+				else if (match(line, /^secret:[ \t]*/)) {
+					out.panel_secret = parseYamlScalar(substr(line, 7));
+				}
+			}
+			if (!hasController)
+				out.panel_enabled = false;
+		}
+	}
+	reply(out);
+}
+
+function saveSettings(args, reply) {
+	const panelEnabled = args.panel_enabled ? '1' : '0';
+	const panelPort = trim('' + (args.panel_port ?? '9090'));
+	const panelSecret = '' + (args.panel_secret ?? '');
+	const quicReject = args.quic_reject ? '1' : '0';
+	const ipv6Support = args.ipv6_support ? '1' : '0';
+
+	if (!match(panelPort, /^[0-9]+$/) || int(panelPort) < 1 || int(panelPort) > 65535)
+		return reply(failure('Panel port must be between 1 and 65535.'));
+	if (length(panelSecret) > 128 || index(panelSecret, '\n') >= 0 || index(panelSecret, '\r') >= 0 || index(panelSecret, chr(0)) >= 0)
+		return reply(failure('Panel secret is invalid or too long.'));
+
+	exec(init, [ 'save_settings', panelEnabled, panelPort, panelSecret, quicReject, ipv6Support ], result => {
+		if (result?.code != 0)
+			return reply(failure('Could not save settings.', trim(result?.stderr ?? '')));
+		reply({
+			ok: true,
+			panel_enabled: panelEnabled == '1',
+			panel_port: panelPort,
+			panel_secret: panelSecret,
+			quic_reject: quicReject == '1',
+			ipv6_support: ipv6Support == '1'
+		});
+	});
+}
+
 function connectionCheck(args, reply) {
 	const urls = {
 		baidu: 'https://www.baidu.com',
@@ -275,6 +395,11 @@ return {
 		apply_ports: { args: { ports: '' }, call: rootOnly(applyPorts) },
 		read_acl: { call: rootOnly(readAcl) },
 		save_acl: { args: { mode: '', entries: '' }, call: rootOnly(saveAcl) },
+		read_settings: { call: rootOnly(readSettings) },
+		save_settings: {
+			args: { panel_enabled: true, panel_port: '', panel_secret: '', quic_reject: true, ipv6_support: true },
+			call: rootOnly(saveSettings)
+		},
 		connection_check: { args: { site: '' }, call: rootOnly(connectionCheck) },
 		update_cn: { call: rootOnly(updateCn) },
 		read_config: { args: { defaults: false }, call: rootOnly(readConfig) },

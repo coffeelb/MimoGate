@@ -21,6 +21,13 @@ const readAcl = rpc.declare({ object: 'mimogate', method: 'read_acl', reject: tr
 const saveAcl = rpc.declare({
 	object: 'mimogate', method: 'save_acl', params: [ 'mode', 'entries' ], reject: true
 });
+const readSettings = rpc.declare({ object: 'mimogate', method: 'read_settings', reject: true });
+const saveSettings = rpc.declare({
+	object: 'mimogate',
+	method: 'save_settings',
+	params: [ 'panel_enabled', 'panel_port', 'panel_secret', 'quic_reject', 'ipv6_support' ],
+	reject: true
+});
 const getHostHints = rpc.declare({ object: 'luci-rpc', method: 'getHostHints', expect: { '': {} } });
 const updateCn = rpc.declare({ object: 'mimogate', method: 'update_cn', reject: true });
 const serviceAction = rpc.declare({
@@ -117,6 +124,7 @@ return view.extend({
 
 	render() {
 		const barStateEl = E('div', { 'class': 'v' }, '—');
+		const barPanelEl = E('div', { 'class': 'v' }, '—');
 		const barAclEl = E('div', { 'class': 'v' }, '—');
 		const barCnEl = E('div', { 'class': 'v' }, '—');
 		const barVerEl = E('div', { 'class': 'v' }, '—');
@@ -126,13 +134,24 @@ return view.extend({
 			enabled: false,
 			ports: '',
 			aclMode: 'all',
-			aclEntries: ''
+			aclEntries: '',
+			panelEnabled: true,
+			panelPort: '9090',
+			panelSecret: '666V888c',
+			quicReject: true,
+			ipv6Support: true
 		};
 
 		const statusItem = (label, valEl) => E('div', { 'class': 'status-item' }, [
 			E('div', { 'class': 'k' }, label),
 			valEl
 		]);
+
+		const renderPanelBar = (enabled) => {
+			dom.content(barPanelEl, E('span', {
+				'class': 'mimogate-text ' + (enabled ? 'success' : 'muted')
+			}, enabled ? _('Enabled') : _('Disabled')));
+		};
 
 		const renderStatus = (st) => {
 			if (st == null) {
@@ -175,6 +194,48 @@ return view.extend({
 			'aria-label': _('Intercepted ports'),
 			'disabled': 'disabled'
 		});
+		const panelBox = E('input', { 'type': 'checkbox', 'checked': 'checked', 'disabled': 'disabled' });
+		const panelPortInput = E('input', {
+			'type': 'text',
+			'class': 'cbi-input-text',
+			'value': '9090',
+			'disabled': 'disabled'
+		});
+		const panelSecretInput = E('input', {
+			'type': 'password',
+			'class': 'cbi-input-password',
+			'value': '666V888c',
+			'disabled': 'disabled'
+		});
+		const panelSecretToggle = E('button', {
+			'type': 'button',
+			'class': 'cbi-button cbi-button-neutral',
+			'title': _('Reveal/hide password'),
+			'aria-label': _('Reveal/hide password'),
+			'disabled': 'disabled',
+			'click': () => {
+				panelSecretInput.type = panelSecretInput.type === 'password' ? 'text' : 'password';
+			}
+		}, '*');
+		const openPanelBtn = E('button', {
+			'type': 'button',
+			'class': 'btn cbi-button cbi-button-action',
+			'disabled': 'disabled',
+			'click': () => {
+				const port = (panelPortInput.value || '9090').trim();
+				window.open('http://' + location.hostname + ':' + port + '/ui/');
+			}
+		}, _('Open Zashboard'));
+		const quicBox = E('input', { 'type': 'checkbox', 'checked': 'checked', 'disabled': 'disabled' });
+		const ipv6Box = E('input', { 'type': 'checkbox', 'checked': 'checked', 'disabled': 'disabled' });
+
+		const panelPortRow = row(_('Panel port'), panelPortInput);
+		const panelSecretRow = row(_('Panel secret'), [
+			E('div', { 'class': 'control-group' }, [ panelSecretInput, panelSecretToggle ]),
+			E('div', { 'class': 'cbi-value-description' },
+				_('Used to authenticate panel API access. It is recommended to set a custom secret instead of the default.'))
+		]);
+		const openPanelRow = row(_('Open Panel'), openPanelBtn);
 
 		const updateCnBtn = E('button', {
 			'type': 'button',
@@ -219,9 +280,20 @@ return view.extend({
 		let busy = false;
 		const syncFormState = () => {
 			const active = ready && !busy;
+			const panelOn = panelBox.checked;
 			const listEnabled = active && aclMode.value !== 'all';
 			enableBox.disabled = !active;
 			portsInput.disabled = !active;
+			panelBox.disabled = !active;
+			panelPortInput.disabled = !active || !panelOn;
+			panelSecretInput.disabled = !active || !panelOn;
+			panelSecretToggle.disabled = !active || !panelOn;
+			openPanelBtn.disabled = !active || !panelOn;
+			panelPortRow.style.display = panelOn ? '' : 'none';
+			panelSecretRow.style.display = panelOn ? '' : 'none';
+			openPanelRow.style.display = panelOn ? '' : 'none';
+			quicBox.disabled = !active;
+			ipv6Box.disabled = !active;
 			aclMode.disabled = !active;
 			aclInput.disabled = !listEnabled;
 			aclPicker.disabled = !listEnabled || aclPicker.options.length <= 1;
@@ -230,6 +302,7 @@ return view.extend({
 			btnReset.disabled = !active;
 		};
 
+		panelBox.addEventListener('change', syncFormState);
 		aclMode.addEventListener('change', syncFormState);
 		aclPicker.addEventListener('change', () => {
 			const val = aclPicker.value;
@@ -254,6 +327,27 @@ return view.extend({
 					throw new Error(rpcError(portRes, _('Unable to apply port bypass.')));
 				portsInput.value = portRes.ports;
 				saved.ports = portRes.ports;
+
+				const setRes = await saveSettings(
+					panelBox.checked,
+					panelPortInput.value,
+					panelSecretInput.value,
+					quicBox.checked,
+					ipv6Box.checked
+				);
+				if (!setRes?.ok)
+					throw new Error(rpcError(setRes, _('Unable to save settings.')));
+				saved.panelEnabled = !!setRes.panel_enabled;
+				saved.panelPort = setRes.panel_port;
+				saved.panelSecret = setRes.panel_secret;
+				saved.quicReject = !!setRes.quic_reject;
+				saved.ipv6Support = !!setRes.ipv6_support;
+				panelBox.checked = saved.panelEnabled;
+				panelPortInput.value = saved.panelPort;
+				panelSecretInput.value = saved.panelSecret;
+				quicBox.checked = saved.quicReject;
+				ipv6Box.checked = saved.ipv6Support;
+				renderPanelBar(saved.panelEnabled);
 
 				const aclRes = await saveAcl(aclMode.value, aclInput.value);
 				if (!aclRes?.ok)
@@ -294,6 +388,11 @@ return view.extend({
 				return;
 			enableBox.checked = saved.enabled;
 			portsInput.value = saved.ports;
+			panelBox.checked = saved.panelEnabled;
+			panelPortInput.value = saved.panelPort;
+			panelSecretInput.value = saved.panelSecret;
+			quicBox.checked = saved.quicReject;
+			ipv6Box.checked = saved.ipv6Support;
 			aclMode.value = saved.aclMode;
 			aclInput.value = saved.aclEntries;
 			syncFormState();
@@ -324,11 +423,25 @@ return view.extend({
 				E('div', { 'class': 'cbi-value-description' },
 					_('Enable MimoGate and start on boot. Uncheck and click Save & Apply to stop the service.'))
 			]),
-			row(_('Firewall port bypass'), [
+			row(_('Routing ports'), [
 				portsInput,
 				E('div', { 'class': 'cbi-value-description' },
 					_('TCP and UDP destination ports outside this list bypass Mihomo. Separate ports with commas (,).'))
 			]),
+			row(_('Enable panel'), [
+				panelBox,
+				E('div', { 'class': 'cbi-value-description' },
+					_('Enables the Mihomo API and Zashboard web UI. The dashboard is downloaded on first use.'))
+			]),
+			panelPortRow,
+			panelSecretRow,
+			openPanelRow,
+			row(_('Reject QUIC'), [
+				quicBox,
+				E('div', { 'class': 'cbi-value-description' },
+					_('Rejects proxied QUIC (UDP 80/443) so applications fall back to TCP immediately. Direct traffic is unaffected.'))
+			]),
+			row(_('IPv6 support'), ipv6Box),
 			row(_('Mainland China IP'), [
 				E('div', { 'style': 'display:flex; align-items:center; gap:.75em; flex-wrap:wrap' }, [ cnStateEl, updateCnBtn ]),
 				E('div', { 'class': 'cbi-value-description' },
@@ -374,9 +487,10 @@ return view.extend({
 			Promise.all([
 				L.resolveDefault(getBootStatus(), null),
 				L.resolveDefault(readPorts(), null),
+				L.resolveDefault(readSettings(), null),
 				L.resolveDefault(readAcl(), null),
 				L.resolveDefault(getHostHints(), {})
-			]).then(([ bootRes, portsRes, aclRes, hosts ]) => {
+			]).then(([ bootRes, portsRes, setRes, aclRes, hosts ]) => {
 				if (bootRes?.ok) {
 					saved.enabled = !!bootRes.enabled;
 					enableBox.checked = saved.enabled;
@@ -387,6 +501,22 @@ return view.extend({
 				}
 				else if (portsRes != null) {
 					ui.addNotification(null, E('p', rpcError(portsRes, _('Unable to read the port list.'))), 'danger');
+				}
+				if (setRes?.ok) {
+					saved.panelEnabled = !!setRes.panel_enabled;
+					saved.panelPort = setRes.panel_port;
+					saved.panelSecret = setRes.panel_secret;
+					saved.quicReject = !!setRes.quic_reject;
+					saved.ipv6Support = !!setRes.ipv6_support;
+					panelBox.checked = saved.panelEnabled;
+					panelPortInput.value = saved.panelPort;
+					panelSecretInput.value = saved.panelSecret;
+					quicBox.checked = saved.quicReject;
+					ipv6Box.checked = saved.ipv6Support;
+					renderPanelBar(saved.panelEnabled);
+				}
+				else {
+					renderPanelBar(saved.panelEnabled);
 				}
 				const entries = Object.entries(hosts || {}).sort((a, b) =>
 					String(a[1]?.name || a[0]).localeCompare(String(b[1]?.name || b[0])));
@@ -427,6 +557,7 @@ return view.extend({
 				E('div', { 'class': 'cbi-section-node' }, [
 					E('div', { 'class': 'mimogate-status-bar' }, [
 						statusItem(_('Running status'), barStateEl),
+						statusItem(_('Panel'), barPanelEl),
 						statusItem(_('Access control'), barAclEl),
 						statusItem(_('Mainland China IP'), barCnEl),
 						statusItem(_('Mihomo version'), barVerEl)

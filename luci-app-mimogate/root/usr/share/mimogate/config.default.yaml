@@ -1,6 +1,8 @@
 mode: rule
 log-level: error
 ipv6: true
+external-controller: 0.0.0.0:9090
+secret: "666V888c"
 
 proxies:
   - name: main-out
@@ -79,7 +81,6 @@ rule-providers:
     interval: 86400
 
 rules:
-  - AND,((NETWORK,udp),(DST-PORT,80/443)),REJECT
   - DOMAIN-SUFFIX,browserleaks.com,main-out
   - RULE-SET,cn_domain,DIRECT
   - RULE-SET,cn_ip,DIRECT

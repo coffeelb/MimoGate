@@ -29,13 +29,15 @@ esac
 START=99
 STOP=10
 USE_PROCD=1
-EXTRA_COMMANDS="clear_log apply_ports save_acl stop_routing wan_online update_cn"
+EXTRA_COMMANDS="clear_log apply_ports save_acl save_settings stop_routing wan_online update_cn"
 
 CORE=/usr/bin/mihomo
 WORKDIR=/etc/mimogate
 CONFIG="$WORKDIR/config.yaml"
 PORTS_CONFIG="$WORKDIR/proxy-ports"
 ACL_CONFIG="$WORKDIR/access-control"
+SETTINGS_CONFIG="$WORKDIR/settings"
+PANEL_UI_URL=https://github.com/Zephyruso/zashboard/releases/download/v3.30.0/dist-no-fonts.zip
 DEFAULT_PORTS_CONFIG=/usr/share/mimogate/proxy-ports.default
 LOG_DIR=/var/log/mimogate
 LOG_FILE="$LOG_DIR/mimogate.log"
@@ -165,10 +167,134 @@ save_acl() (
 	return 1
 )
 
+load_settings() {
+	panel_enabled=1
+	panel_port=9090
+	panel_secret=666V888c
+	quic_reject=1
+	ipv6_support=1
+	local line key val
+	if [ -f "$SETTINGS_CONFIG" ]; then
+		while IFS= read -r line; do
+			key="${line%%=*}"
+			val="${line#*=}"
+			case "$key" in
+				panel_enabled) [ "$val" = 0 ] && panel_enabled=0 || panel_enabled=1 ;;
+				panel_port)
+					case "$val" in
+						''|*[!0-9]*) ;;
+						*) [ "$val" -ge 1 ] && [ "$val" -le 65535 ] && panel_port="$val" ;;
+					esac
+					;;
+				panel_secret) panel_secret="$val" ;;
+				quic_reject) [ "$val" = 0 ] && quic_reject=0 || quic_reject=1 ;;
+				ipv6_support) [ "$val" = 0 ] && ipv6_support=0 || ipv6_support=1 ;;
+			esac
+		done < "$SETTINGS_CONFIG"
+	fi
+	if [ -s "$CONFIG" ] && { [ ! -f "$SETTINGS_CONFIG" ] || [ "$CONFIG" -nt "$SETTINGS_CONFIG" ]; }; then
+		while IFS= read -r line; do
+			key="${line%%=*}"
+			val="${line#*=}"
+			case "$key" in
+				panel_enabled) panel_enabled="$val" ;;
+				panel_port) panel_port="$val" ;;
+				panel_secret) panel_secret="$val" ;;
+				ipv6_support) ipv6_support="$val" ;;
+			esac
+		done <<-EOF
+			$(awk '
+				function clean(s,   q) {
+					sub(/^[ \t]+/, "", s)
+					if (substr(s, 1, 1) == "\"" || substr(s, 1, 1) == "\x27") {
+						q = substr(s, 1, 1)
+						sub(/^["\x27]/, "", s)
+						sub(q "[ \t]*(#.*)?$", "", s)
+						if (q == "\"") {
+							gsub(/\\"/, "\"", s)
+							gsub(/\\\\/, "\\", s)
+						}
+					} else {
+						sub(/[ \t]*#.*$/, "", s)
+						sub(/[ \t]+$/, "", s)
+					}
+					return s
+				}
+				NR == 1 { sub(/^\357\273\277/, "") }
+				{ sub(/\r$/, "") }
+				/^ipv6:[ \t]*/ {
+					v = tolower(clean(substr($0, 6)))
+					if (v == "true") ipv6 = "1"
+					else if (v == "false") ipv6 = "0"
+				}
+				/^external-controller:[ \t]*/ {
+					v = clean(substr($0, 21))
+					if (v == "" || v == "null" || v == "~") {
+						pe = "0"
+					} else if (match(v, /:[0-9]+$/)) {
+						p = substr(v, RSTART + 1, RLENGTH - 1) + 0
+						if (p >= 1 && p <= 65535) {
+							pe = "1"
+							pp = p
+						}
+					}
+				}
+				/^secret:[ \t]*/ {
+					has_secret = 1
+					ps = clean(substr($0, 8))
+				}
+				END {
+					if (ipv6 != "") print "ipv6_support=" ipv6
+					print "panel_enabled=" (pe != "" ? pe : "0")
+					if (pp != "") print "panel_port=" pp
+					if (has_secret) print "panel_secret=" ps
+				}
+			' "$CONFIG")
+		EOF
+	fi
+}
+
+save_settings() (
+	umask 077
+	local pe="${1:-1}" pp="${2:-9090}" ps="${3:-}" qr="${4:-1}" v6="${5:-1}" staged
+	[ "$pe" = 0 ] || pe=1
+	[ "$qr" = 0 ] || qr=1
+	[ "$v6" = 0 ] || v6=1
+	case "$pp" in
+		''|*[!0-9]*)
+			echo 'Panel port must be between 1 and 65535.' >&2
+			return 1
+			;;
+	esac
+	if [ "$pp" -lt 1 ] || [ "$pp" -gt 65535 ]; then
+		echo 'Panel port must be between 1 and 65535.' >&2
+		return 1
+	fi
+	mkdir -p "$WORKDIR" || return 1
+	staged="$(mktemp "$WORKDIR/.settings.XXXXXX")" || return 1
+	trap 'rm -f "$staged"' EXIT
+	if printf 'panel_enabled=%s\npanel_port=%s\npanel_secret=%s\nquic_reject=%s\nipv6_support=%s\n' \
+		"$pe" "$pp" "$ps" "$qr" "$v6" > "$staged" && mv -f "$staged" "$SETTINGS_CONFIG"; then
+		trap - EXIT
+		log_ports "Saved settings (panel: $pe, port: $pp, quic_reject: $qr, ipv6: $v6)."
+		return 0
+	fi
+	echo 'Could not save settings.' >&2
+	return 1
+)
+
 # Keep the user's YAML intact. Merge its normal block mapping into the runtime file.
 prepare_runtime_config() (
 	umask 077
-	awk -v device="$TUN_DEVICE" -v mark="$CORE_MARK" '
+	local panel_enabled panel_port panel_secret quic_reject ipv6_support
+	load_settings
+	PANEL_SECRET="$panel_secret" awk \
+		-v device="$TUN_DEVICE" \
+		-v mark="$CORE_MARK" \
+		-v panel_enabled="$panel_enabled" \
+		-v panel_port="$panel_port" \
+		-v panel_url="$PANEL_UI_URL" \
+		-v ipv6_support="$ipv6_support" '
 		BEGIN { print "x-mimogate-config: &mimogateConfig" }
 		NR == 1 { sub(/^\357\273\277/, "") }
 		{ sub(/\r$/, "") }
@@ -184,6 +310,18 @@ prepare_runtime_config() (
 				exit 1
 			print "<<: *mimogateConfig"
 			print "routing-mark: " mark
+			print "ipv6: " (ipv6_support == 1 ? "true" : "false")
+			if (panel_enabled == 1) {
+				secret = ENVIRON["PANEL_SECRET"]
+				gsub(/\\/, "\\\\", secret)
+				gsub(/"/, "\\\"", secret)
+				print "external-controller: \"0.0.0.0:" panel_port "\""
+				print "secret: \"" secret "\""
+				print "external-ui: \"ui\""
+				print "external-ui-url: \"" panel_url "\""
+			} else {
+				print "external-controller: \"\""
+			}
 			print "tun:"
 			print "  <<: *mimogateTun"
 			print "  enable: true"
@@ -331,16 +469,19 @@ install_routing() (
 			acl_entries="$(normalize_acl_entries "$acl_entries")" && acl_sets="$(emit_acl_sets "$acl_entries")" || return 1
 		fi
 	fi
+	local panel_enabled panel_port panel_secret quic_reject ipv6_support quic_rule=
+	load_settings
 	lan="$(ubus call network.interface.lan status | jsonfilter -e '@.l3_device')"
 	case "$lan" in
 		''|*[!a-zA-Z0-9_.:@-]*) return 1 ;;
 	esac
 	ip link show dev "$TUN_DEVICE" >/dev/null || return 1
-	if ip -6 addr show dev "$TUN_DEVICE" scope global | grep -q 'inet6 '; then
+	if [ "$ipv6_support" = 1 ] && ip -6 addr show dev "$TUN_DEVICE" scope global | grep -q 'inet6 '; then
 		families='-4 -6'
 	else
 		ipv6_bypass='meta nfproto ipv6 return'
 	fi
+	[ "$quic_reject" != 1 ] || quic_rule='udp dport { 80, 443 } reject'
 	if [ -s "$CN_CACHE" ]; then
 		cn_file="$CN_CACHE"
 		cn_source=cached
@@ -373,6 +514,7 @@ install_routing() (
 					ip6 daddr { ::/128, ::1, fc00::/7, fe80::/10, ff00::/8 } return
 					ip daddr @cn4 counter return
 					ip6 daddr @cn6 counter return
+					$quic_rule
 					meta mark set meta mark | $TUN_MARK
 				}
 				chain prerouting {

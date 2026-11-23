@@ -3,13 +3,13 @@
     "description": "Manage the MimoGate service and its YAML configuration",
     "read": {
       "ubus": {
-        "mimogate": [ "status", "version", "boot_status", "read_config", "read_ports", "read_acl", "connection_check" ],
+        "mimogate": [ "status", "version", "boot_status", "read_config", "read_ports", "read_acl", "read_settings", "connection_check" ],
         "luci-rpc": [ "getHostHints" ]
       }
     },
     "write": {
       "ubus": {
-        "mimogate": [ "service_action", "check_config", "save_config", "apply_ports", "save_acl", "update_cn" ]
+        "mimogate": [ "service_action", "check_config", "save_config", "apply_ports", "save_acl", "save_settings", "update_cn" ]
       }
     }
   },
