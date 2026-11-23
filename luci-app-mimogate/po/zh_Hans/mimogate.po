@@ -28,20 +28,11 @@ msgstr "配置无效，未保存。"
 msgid "Running"
 msgstr "运行中"
 
-msgid "Save and restart"
-msgstr "保存并重启"
-
 msgid "Save"
 msgstr "保存"
 
 msgid "Saved, but the service failed to restart:"
 msgstr "已保存，但服务重启失败："
-
-msgid "Saved. Restart the service to apply the changes."
-msgstr "已保存。重启服务后应用更改。"
-
-msgid "Saved. The service was restarted."
-msgstr "已保存，服务已重启。"
 
 msgid "Stopped"
 msgstr "未运行"
@@ -55,11 +46,8 @@ msgstr "Mihomo 版本"
 msgid "Unable to read the log."
 msgstr "无法读取日志。"
 
-msgid "Restore defaults"
-msgstr "恢复默认"
-
-msgid "Default configuration loaded. Save to apply it."
-msgstr "已载入默认配置。请保存以应用。"
+msgid "Load default config"
+msgstr "加载默认配置"
 
 msgid "Service action failed."
 msgstr "服务操作失败。"
@@ -337,8 +325,8 @@ msgstr "路由端口"
 msgid "Reveal/hide password"
 msgstr "显示/隐藏密码"
 
-msgid "Saved. Enable the proxy switch on the Settings page to start the service."
-msgstr "已保存。代理开关当前未开启，请在设置页启用以启动服务。"
+msgid "Saved, the proxy switch is disabled."
+msgstr "已保存，代理开关未开启。"
 
 msgid "Enable IPv6 handling in Mihomo and the firewall. When disabled, IPv6 traffic bypasses Mihomo."
 msgstr "启用 Mihomo 与防火墙的 IPv6 流量接管；关闭后 IPv6 流量直接绕过代理。"

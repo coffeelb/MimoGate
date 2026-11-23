@@ -49,6 +49,8 @@ return view.extend({
 	},
 
 	render(result) {
+		let savedContent = result?.ok ? result.content : '';
+
 		const editor = E('textarea', {
 			'class': 'cbi-input-textarea',
 			'rows': 30,
@@ -56,10 +58,11 @@ return view.extend({
 			'spellcheck': 'false',
 			'style': 'width:100%; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; line-height:1.45; tab-size:2'
 		});
-		editor.value = result?.ok ? result.content : '';
+		editor.value = savedContent;
 
 		const output = E('div', { 'style': 'margin-top:1em', 'aria-live': 'polite' });
 
+		const clearOutput = () => dom.content(output, '');
 		const showResult = (ok, message) => dom.content(output,
 			E('div', { 'class': 'alert-message ' + (ok ? 'info' : 'danger') },
 				E('pre', { 'style': 'white-space:pre-wrap; margin:0' }, message)));
@@ -86,14 +89,14 @@ return view.extend({
 			}
 		});
 
-		const restoreDefaults = guarded(async () => {
+		const loadDefaults = guarded(async () => {
 			const defaults = await readConfig(true);
 
 			if (!defaults?.ok)
 				throw new Error(errorText(defaults));
 
 			editor.value = defaults.content;
-			showResult(true, _('Default configuration loaded. Save to apply it.'));
+			clearOutput();
 		});
 
 		const check = guarded(async () => {
@@ -102,8 +105,9 @@ return view.extend({
 			showResult(res?.ok, res?.ok ? _('Configuration is valid.') : errorText(res));
 		});
 
-		const save = (restart) => guarded(async () => {
-			if (restart) {
+		const save = (apply) => guarded(async () => {
+			clearOutput();
+			if (apply) {
 				ui.showModal(_('Applying configuration changes'), [
 					E('p', { 'class': 'spinning' }, _('Waiting for changes to be applied...'))
 				]);
@@ -118,39 +122,46 @@ return view.extend({
 					return;
 				}
 
+				savedContent = text;
 				editor.value = text;
-				if (!restart) {
-					showResult(true, _('Saved. Restart the service to apply the changes.'));
+				if (!apply)
 					return;
-				}
 
+				let notice = _('Configuration changes have been applied.');
 				try {
 					const st = await getStatus();
 					if (!st?.ok)
 						throw new Error(errorText(st));
-					if (!st.running) {
-						showResult(true, _('Saved. Enable the proxy switch on the Settings page to start the service.'));
-						return;
+					if (st.running) {
+						const restartRes = await serviceAction('restart');
+						if (!restartRes?.ok)
+							throw new Error(errorText(restartRes));
 					}
-					const result = await serviceAction('restart');
-					if (!result?.ok)
-						throw new Error(errorText(result));
+					else {
+						notice = _('Saved, the proxy switch is disabled.');
+					}
 				}
 				catch (e) {
 					throw new Error(_('Saved, but the service failed to restart:') + '\n' + e.message);
 				}
 
-				showResult(true, _('Saved. The service was restarted.'));
 				ui.showModal(_('Applying configuration changes'), [
-					E('p', {}, _('Configuration changes have been applied.'))
+					E('p', {}, notice)
 				]);
 				await new Promise((resolve) => window.setTimeout(resolve, 1000));
 			}
 			finally {
-				if (restart)
+				if (apply)
 					ui.hideModal();
 			}
 		});
+
+		const reset = () => {
+			if (busy)
+				return;
+			editor.value = savedContent;
+			clearOutput();
+		};
 
 		return E('div', { 'class': 'cbi-map' }, [
 			E('h3', _('MimoGate configuration management')),
@@ -159,17 +170,19 @@ return view.extend({
 			E('div', { 'class': 'cbi-section' }, [
 				E('div', { 'class': 'cbi-section-node', 'style': 'padding: 1em' }, [
 					editor,
-					output
+					output,
+					E('div', { 'style': 'display:flex; gap:.5em; flex-wrap:wrap; margin-top:.75em' }, [
+						E('button', { 'type': 'button', 'class': 'btn cbi-button', 'click': loadDefaults }, _('Load default config')),
+						E('button', { 'type': 'button', 'class': 'btn cbi-button cbi-button-action', 'click': check }, _('Check'))
+					])
 				])
 			]),
 			E('div', { 'class': 'cbi-page-actions' }, [
-				E('button', { 'type': 'button', 'class': 'btn cbi-button', 'click': restoreDefaults }, _('Restore defaults')),
-				' ',
-				E('button', { 'type': 'button', 'class': 'btn cbi-button cbi-button-action', 'click': check }, _('Check')),
+				E('button', { 'type': 'button', 'class': 'btn cbi-button cbi-button-apply', 'click': save(true) }, _('Save & Apply')),
 				' ',
 				E('button', { 'type': 'button', 'class': 'btn cbi-button cbi-button-save', 'click': save(false) }, _('Save')),
 				' ',
-				E('button', { 'type': 'button', 'class': 'btn cbi-button cbi-button-positive', 'click': save(true) }, _('Save and restart'))
+				E('button', { 'type': 'button', 'class': 'btn cbi-button cbi-button-reset', 'click': reset }, _('Reset'))
 			])
 		]);
 	}
