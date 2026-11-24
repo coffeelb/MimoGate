@@ -414,7 +414,7 @@ return view.extend({
 			row(_('Proxy switch'), [
 				enableBox,
 				E('div', { 'class': 'cbi-value-description' },
-					_('Enable MimoGate and start on boot. Uncheck and click Save & Apply to stop the service.'))
+					_('Enable MimoGate and start on boot.'))
 			]),
 			row(_('Routing ports'), [
 				portsInput,
