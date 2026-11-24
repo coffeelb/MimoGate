@@ -437,7 +437,7 @@ return view.extend({
 			row(_('IPv6 support'), [
 				ipv6Box,
 				E('div', { 'class': 'cbi-value-description' },
-					_('Enable IPv6 handling in Mihomo and the firewall. When disabled, IPv6 traffic bypasses Mihomo.'))
+					_('Proxy IPv6 traffic via the firewall (requires ipv6: true in config.yaml). When disabled, proxied IPv6 is rejected to fall back to IPv4 while direct IPv6 is unaffected.'))
 			]),
 			row(_('Mainland China IP'), [
 				E('div', { 'style': 'display:flex; align-items:center; gap:.75em; flex-wrap:wrap' }, [ updateCnBtn, cnStateEl ]),

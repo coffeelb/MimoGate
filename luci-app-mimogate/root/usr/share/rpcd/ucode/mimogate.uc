@@ -283,14 +283,7 @@ function readSettings(_, reply) {
 					line = replace(line, /^\xef\xbb\xbf/, '');
 					first = false;
 				}
-				if (match(line, /^ipv6:[ \t]*/)) {
-					const v = lc(parseYamlScalar(substr(line, 5)));
-					if (v == 'true')
-						out.ipv6_support = true;
-					else if (v == 'false')
-						out.ipv6_support = false;
-				}
-				else if (match(line, /^external-controller:[ \t]*/)) {
+				if (match(line, /^external-controller:[ \t]*/)) {
 					hasController = true;
 					const v = parseYamlScalar(substr(line, 20));
 					if (v == '' || v == 'null' || v == '~') {

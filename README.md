@@ -30,7 +30,7 @@ Instead of bloated form-based node and rule generators, it focuses on **service 
 
 - **Integrated Zashboard Web UI**
   - One-click toggle in Settings for the Mihomo External Controller API and [Zashboard](https://github.com/Zephyruso/zashboard) dashboard (automatically downloads the latest release assets on first use), with customizable port, secret (with reveal/hide toggle), and a quick-launch button.
-  - Automatically syncs panel and IPv6 settings with `config.yaml`.
+  - Automatically syncs panel settings with `config.yaml`.
 
 - **Clean & Intuitive LuCI Experience (Inspired by HomeProxy)**
   - Organized into three pages: **Settings** (live status bar + General / Access control tabs), **Configuration management** (raw YAML editor + validation + Load default config), and **Service status** (Baidu/Google connection check + separate auto-refreshing **MimoGate log** and **Mihomo log** viewers).
@@ -90,6 +90,17 @@ make package/mimogate/luci-app-mimogate/compile V=s
   - Config files (preserved across `sysupgrade`): `/etc/mimogate/config.yaml`, `proxy-ports`, `access-control`, `settings`
   - Mainland China IP cache: `/etc/mimogate/cn.nft` (bundled snapshot at `/usr/share/mimogate/cn.nft`)
   - Runtime logs: `/var/log/mimogate/mimogate.log`, `/var/log/mimogate/mihomo.log`
+
+### Firewall IPv6 Behavior
+
+MimoGate does not override `ipv6` or `dns.ipv6` in `config.yaml`. The **IPv6 support** switch in LuCI operates purely in nftables and policy routing:
+
+| `ipv6` in `config.yaml` | LuCI **IPv6 support** | Effective Behavior |
+| :---: | :---: | :--- |
+| **`true`** | **Enabled** | **Full dual-stack proxy**: Both Mihomo and the firewall handle IPv6 (mainland China IPv6 still goes direct via `@cn6`). |
+| **`true`** | **Disabled** | **IPv4 proxy with instant fallback**: Mihomo can still use IPv6 itself (e.g., IPv6 proxy nodes / upstream DNS); mainland China IPv6 stays direct, while proxied overseas IPv6 is rejected in the firewall so clients immediately fall back to IPv4 via the proxy. |
+| **`false` (or omitted)** | **Enabled** | **`config.yaml` takes effect**: Mihomo disables IPv6 (`mimogate0` has no global IPv6 address); the firewall detects this, skips IPv6 policy routing, bypasses IPv6, and logs a reminder without breaking connectivity. |
+| **`false` (or omitted)** | **Disabled** | **IPv4-only proxy**: Mihomo disables IPv6, and the firewall rejects proxied overseas IPv6 (preventing leaks or stalls even if `dns.ipv6` is still enabled) while keeping mainland China IPv6 direct. |
 
 ---
 
