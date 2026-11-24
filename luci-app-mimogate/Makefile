@@ -1,5 +1,5 @@
 # Copyright (C) 2026 COFFEELB
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: GPL-3.0-only
 #
 # MimoGate - minimal LuCI app for Mihomo: service control + raw YAML config editor
 
@@ -7,7 +7,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_VERSION:=0.1.1
 PKG_RELEASE:=15
-PKG_LICENSE:=MIT AND GPL-3.0-only
+PKG_LICENSE:=GPL-3.0-only
 PKG_PO_VERSION:=$(PKG_VERSION)-r$(PKG_RELEASE)
 
 LUCI_TITLE:=MimoGate - minimal Mihomo service control and YAML config editor

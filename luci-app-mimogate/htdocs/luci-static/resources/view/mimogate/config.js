@@ -1,5 +1,5 @@
 // Copyright (C) 2026 COFFEELB
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 
 'use strict';
 'require dom';
