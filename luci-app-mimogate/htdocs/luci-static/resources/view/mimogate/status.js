@@ -125,15 +125,15 @@ return view.extend({
 				})
 			}, _('Clear log'));
 
-			const section = E('div', { 'class': 'cbi-map', 'style': 'margin-top: .75em; margin-bottom: 0' }, [
-				E('h3', { 'style': 'align-items: center; display: flex; gap: .5em; margin: .25em 0 .4em' }, [
+			const section = E('div', { 'class': 'cbi-map' }, [
+				E('h3', { 'name': 'content', 'style': 'align-items: center; display: flex; gap: .5em' }, [
 					title,
 					clearBtn
 				]),
-				E('div', { 'class': 'cbi-section', 'style': 'margin-bottom: .25em' }, [
+				E('div', { 'class': 'cbi-section' }, [
 					errorEl,
 					textareaEl,
-					E('div', { 'style': 'text-align:right; margin-top:.25em' },
+					E('div', { 'style': 'text-align:right' },
 						E('small', {}, _('Refresh every %d seconds.').format(POLL_INTERVAL)))
 				])
 			]);
@@ -193,8 +193,12 @@ return view.extend({
 					connRow(_('Google'), 'google')
 				])
 			]),
-			mimogateLog.section,
-			mihomoLog.section
+			E('div', { 'class': 'cbi-section' }, [
+				E('div', { 'class': 'cbi-section-node' }, [
+					mimogateLog.section,
+					mihomoLog.section
+				])
+			])
 		]);
 	}
 });
