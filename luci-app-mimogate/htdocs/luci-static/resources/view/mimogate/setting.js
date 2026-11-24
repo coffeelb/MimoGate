@@ -235,9 +235,6 @@ return view.extend({
 					const res = await updateCn();
 					if (!res?.ok)
 						throw new Error(rpcError(res, _('Unable to update mainland China IP list.')));
-					ui.addNotification(null, E('p', res.unchanged
-						? _('Mainland China IP list is already up to date.')
-						: _('Mainland China IP list updated. Restart MimoGate to apply it.')), 'info');
 					await syncStatus();
 				}
 				catch (e) {

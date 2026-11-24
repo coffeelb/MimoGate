@@ -85,12 +85,6 @@ msgstr "更新列表"
 msgid "Updates are saved to cache and take effect the next time MimoGate starts."
 msgstr "更新后将保存到缓存，下次重启 MimoGate 时生效。"
 
-msgid "Mainland China IP list is already up to date."
-msgstr "中国大陆 IP 列表已是最新。"
-
-msgid "Mainland China IP list updated. Restart MimoGate to apply it."
-msgstr "中国大陆 IP 列表已更新，重启 MimoGate 后生效。"
-
 msgid "Unable to update mainland China IP list."
 msgstr "无法更新中国大陆 IP 列表。"
 
