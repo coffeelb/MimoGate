@@ -107,10 +107,27 @@ return view.extend({
 
 		const save = (apply) => guarded(async () => {
 			clearOutput();
+			let applyTimer = null;
+			const stopApplyCountdown = () => {
+				if (applyTimer != null) {
+					window.clearTimeout(applyTimer);
+					applyTimer = null;
+				}
+			};
 			if (apply) {
-				ui.showModal(_('Applying configuration changes'), [
-					E('p', { 'class': 'spinning' }, _('Waiting for changes to be applied...'))
-				]);
+				const deadline = Date.now() + (L.env.apply_rollback || 90) * 1000;
+				let ts = Date.now();
+				const tick = () => {
+					const now = Date.now();
+					ui.changes.displayStatus('notice spinning',
+						E('p', _('Applying configuration changes… %ds')
+							.format(Math.max(Math.floor((deadline - Date.now()) / 1000), 0))));
+					if (now >= deadline)
+						return;
+					applyTimer = window.setTimeout(tick, Math.max(1000 - (now - ts), 0));
+					ts = now;
+				};
+				tick();
 			}
 			try {
 				const text = editorText(editor.value);
@@ -127,7 +144,6 @@ return view.extend({
 				if (!apply)
 					return;
 
-				let notice = _('Configuration changes have been applied.');
 				try {
 					const st = await getStatus();
 					if (!st?.ok)
@@ -137,22 +153,21 @@ return view.extend({
 						if (!restartRes?.ok)
 							throw new Error(errorText(restartRes));
 					}
-					else {
-						notice = _('Saved, the proxy switch is disabled.');
-					}
 				}
 				catch (e) {
 					throw new Error(_('Saved, but the service failed to restart:') + '\n' + e.message);
 				}
 
-				ui.showModal(_('Applying configuration changes'), [
-					E('p', {}, notice)
-				]);
-				await new Promise((resolve) => window.setTimeout(resolve, 1000));
+				stopApplyCountdown();
+				ui.changes.displayStatus('notice',
+					E('p', _('Configuration changes applied.')));
+				await new Promise((resolve) => window.setTimeout(resolve, (L.env.apply_display || 1.5) * 1000));
 			}
 			finally {
-				if (apply)
-					ui.hideModal();
+				if (apply) {
+					stopApplyCountdown();
+					ui.changes.displayStatus(false);
+				}
 			}
 		});
 

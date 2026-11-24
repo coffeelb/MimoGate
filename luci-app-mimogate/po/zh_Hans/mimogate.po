@@ -256,9 +256,6 @@ msgstr "保存并应用"
 msgid "Reset"
 msgstr "复位"
 
-msgid "Saved. Restart MimoGate to apply changes."
-msgstr "已保存，重启 MimoGate 后生效。"
-
 msgid "Panel"
 msgstr "面板"
 
@@ -319,20 +316,8 @@ msgstr "路由端口"
 msgid "Reveal/hide password"
 msgstr "显示/隐藏密码"
 
-msgid "Saved, the proxy switch is disabled."
-msgstr "已保存，代理开关未开启。"
-
 msgid "Proxy IPv6 traffic via the firewall (requires ipv6: true in config.yaml). When disabled, proxied IPv6 is rejected to fall back to IPv4 while direct IPv6 is unaffected."
 msgstr "通过防火墙接管 IPv6 流量（需在 config.yaml 中启用 ipv6: true）；关闭后拒绝需代理的 IPv6 流量以回落到 IPv4，直连 IPv6 不受影响。"
 
 msgid "Checking..."
 msgstr "检测中..."
-
-msgid "Applying configuration changes"
-msgstr "正在应用配置更改"
-
-msgid "Waiting for changes to be applied..."
-msgstr "正在等待配置被应用..."
-
-msgid "Configuration changes have been applied."
-msgstr "配置更改已应用。"
