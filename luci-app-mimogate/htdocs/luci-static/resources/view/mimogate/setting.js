@@ -251,23 +251,45 @@ return view.extend({
 			E('option', { 'value': 'bypass' }, _('Bypass listed devices')),
 			E('option', { 'value': 'proxy' }, _('Proxy listed devices only'))
 		]);
-		const aclPicker = E('select', { 'class': 'cbi-input-select', 'disabled': 'disabled' }, [
-			E('option', { 'value': '' }, _('-- Add online device (MAC / IP) --'))
-		]);
-		const aclInput = E('textarea', {
-			'class': 'cbi-input-textarea',
-			'rows': 4,
-			'placeholder': 'aa:bb:cc:dd:ee:ff, 192.168.1.50',
-			'style': 'width:100%; font-family:monospace',
-			'disabled': 'disabled'
-		});
+		const MAC_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i;
+		const makeAclList = (placeholder) => {
+			const list = new ui.DynamicList([], {}, { 'placeholder': placeholder, 'disabled': true });
+			return { list, el: list.render() };
+		};
+		const aclMac = makeAclList(_('-- Add MAC --'));
+		const aclIpv4 = makeAclList(_('-- Add IPv4 --'));
+		const aclIpv6 = makeAclList(_('-- Add IPv6 --'));
+		const aclMacRow = row(_('MAC addresses'), aclMac.el);
+		const aclIpv4Row = row(_('IPv4 addresses'), aclIpv4.el);
+		const aclIpv6Row = row(_('IPv6 addresses'), aclIpv6.el);
+
+		const setAclDisabled = (disabled) => {
+			for (const { list, el } of [ aclMac, aclIpv4, aclIpv6 ]) {
+				const dd = el.querySelector('.cbi-dropdown');
+				list.options.disabled = disabled;
+				el.toggleAttribute('disabled', disabled);
+				dd?.toggleAttribute('disabled', disabled);
+				const inst = dd && dom.findClassInstance(dd);
+				if (inst)
+					inst.options.disabled = disabled;
+			}
+		};
+		const setAclValues = (raw) => {
+			const items = (raw || '').split(/[\s,]+/).filter(Boolean);
+			aclMac.list.setValue(items.filter(x => MAC_RE.test(x)));
+			aclIpv4.list.setValue(items.filter(x => !MAC_RE.test(x) && !x.includes(':')));
+			aclIpv6.list.setValue(items.filter(x => !MAC_RE.test(x) && x.includes(':')));
+		};
+		const getAclValues = () =>
+			[ ...aclMac.list.getValue(), ...aclIpv4.list.getValue(), ...aclIpv6.list.getValue() ].join(', ');
 
 		let ready = false;
 		let busy = false;
 		const syncFormState = () => {
 			const active = ready && !busy;
 			const panelOn = panelBox.checked;
-			const listEnabled = active && aclMode.value !== 'all';
+			const listVisible = aclMode.value !== 'all';
+			const listEnabled = active && listVisible;
 			enableBox.disabled = !active;
 			portsInput.disabled = !active;
 			panelBox.disabled = !active;
@@ -281,25 +303,18 @@ return view.extend({
 			quicBox.disabled = !active;
 			ipv6Box.disabled = !active;
 			aclMode.disabled = !active;
-			aclInput.disabled = !listEnabled;
-			aclPicker.disabled = !listEnabled || aclPicker.options.length <= 1;
+			aclMacRow.style.display = listVisible ? '' : 'none';
+			aclIpv4Row.style.display = listVisible ? '' : 'none';
+			aclIpv6Row.style.display = (listVisible && ipv6Box.checked) ? '' : 'none';
+			setAclDisabled(!listEnabled);
 			btnSaveApply.disabled = !active;
 			btnSave.disabled = !active;
 			btnReset.disabled = !active;
 		};
 
 		panelBox.addEventListener('change', syncFormState);
+		ipv6Box.addEventListener('change', syncFormState);
 		aclMode.addEventListener('change', syncFormState);
-		aclPicker.addEventListener('change', () => {
-			const val = aclPicker.value;
-			aclPicker.value = '';
-			if (!val)
-				return;
-			const cur = aclInput.value.split(/[\s,]+/).filter(Boolean);
-			if (!cur.some(x => x.toLowerCase() === val.toLowerCase()))
-				cur.push(val);
-			aclInput.value = cur.join(', ');
-		});
 
 		const saveAll = (apply) => ui.createHandlerFn(this, async () => {
 			if (!ready || busy)
@@ -351,11 +366,11 @@ return view.extend({
 				ipv6Box.checked = saved.ipv6Support;
 				renderPanelBar(saved.panelEnabled);
 
-				const aclRes = await saveAcl(aclMode.value, aclInput.value);
+				const aclRes = await saveAcl(aclMode.value, getAclValues());
 				if (!aclRes?.ok)
 					throw new Error(rpcError(aclRes, _('Unable to save access control settings.')));
 				aclMode.value = aclRes.mode;
-				aclInput.value = aclRes.entries;
+				setAclValues(aclRes.entries);
 				saved.aclMode = aclRes.mode;
 				saved.aclEntries = aclRes.entries;
 
@@ -406,7 +421,7 @@ return view.extend({
 			quicBox.checked = saved.quicReject;
 			ipv6Box.checked = saved.ipv6Support;
 			aclMode.value = saved.aclMode;
-			aclInput.value = saved.aclEntries;
+			setAclValues(saved.aclEntries);
 			syncFormState();
 		};
 
@@ -466,13 +481,14 @@ return view.extend({
 		]);
 
 		const accessPane = E('div', { 'class': 'cbi-tabcontainer', 'style': 'display:none' }, [
-			row(_('Access control mode'), aclMode),
-			row(_('Add online device'), aclPicker),
-			row(_('Device list'), [
-				aclInput,
+			row(_('Access control mode'), [
+				aclMode,
 				E('div', { 'class': 'cbi-value-description' },
 					_('Control which LAN devices use Mihomo by MAC, IPv4, IPv6, or CIDR. Changes take effect the next time MimoGate starts.'))
-			])
+			]),
+			aclMacRow,
+			aclIpv4Row,
+			aclIpv6Row
 		]);
 
 		const tabGeneral = E('li', { 'class': 'cbi-tab' }, E('a', {
@@ -544,21 +560,36 @@ return view.extend({
 				}
 				const entries = Object.entries(hosts || {}).sort((a, b) =>
 					String(a[1]?.name || a[0]).localeCompare(String(b[1]?.name || b[0])));
+				const macVals = [], macLabels = {};
+				const ip4Vals = [], ip4Labels = {};
+				const ip6Vals = [], ip6Labels = {};
+				const pushChoice = (vals, labels, val, hostName) => {
+					if (!val || labels[val])
+						return;
+					vals.push(val);
+					labels[val] = hostName ? E([], [ val, ' (', E('strong', {}, [ hostName ]), ')' ]) : val;
+				};
 				for (const [ mac, info ] of entries) {
-					const label = info?.name ? info.name + ' — ' : '';
+					const hostName = info?.name || '';
 					if (mac)
-						aclPicker.appendChild(E('option', { 'value': mac.toLowerCase() }, '%s%s (MAC)'.format(label, mac.toLowerCase())));
+						pushChoice(macVals, macLabels, mac.toLowerCase(), hostName);
 					for (const ip of (info?.ipaddrs || []))
-						aclPicker.appendChild(E('option', { 'value': ip }, '%s%s'.format(label, ip)));
+						pushChoice(ip4Vals, ip4Labels, ip, hostName);
 					for (const ip6 of (info?.ip6addrs || []))
 						if (!/^fe80:/i.test(ip6))
-							aclPicker.appendChild(E('option', { 'value': ip6 }, '%s%s'.format(label, ip6)));
+							pushChoice(ip6Vals, ip6Labels, ip6, hostName);
 				}
+				if (macVals.length)
+					aclMac.list.addChoices(macVals, macLabels);
+				if (ip4Vals.length)
+					aclIpv4.list.addChoices(ip4Vals, ip4Labels);
+				if (ip6Vals.length)
+					aclIpv6.list.addChoices(ip6Vals, ip6Labels);
 				if (aclRes?.ok) {
 					saved.aclMode = aclRes.mode;
 					saved.aclEntries = aclRes.entries;
 					aclMode.value = saved.aclMode;
-					aclInput.value = saved.aclEntries;
+					setAclValues(saved.aclEntries);
 				}
 				else {
 					loadOk = false;

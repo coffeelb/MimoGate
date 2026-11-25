@@ -178,7 +178,7 @@ return view.extend({
 						btn.disabled = false;
 					}
 				})
-			}, _('Check'));
+			}, _('Check', 'Connection check'));
 
 			return E('div', { 'class': 'cbi-value' }, [
 				E('label', { 'class': 'cbi-value-title' }, label),

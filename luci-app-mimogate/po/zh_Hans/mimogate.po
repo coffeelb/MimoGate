@@ -208,14 +208,30 @@ msgstr "运行状态"
 msgid "Access control mode"
 msgstr "访问控制模式"
 
-msgid "Add online device"
-msgstr "从在线设备添加"
+msgid "MAC addresses"
+msgstr "MAC 地址"
 
-msgid "Device list"
-msgstr "设备列表"
+msgid "IPv4 addresses"
+msgstr "IPv4 地址"
+
+msgid "IPv6 addresses"
+msgstr "IPv6 地址"
+
+msgid "-- Add MAC --"
+msgstr "-- 添加 MAC --"
+
+msgid "-- Add IPv4 --"
+msgstr "-- 添加 IPv4 --"
+
+msgid "-- Add IPv6 --"
+msgstr "-- 添加 IPv6 --"
 
 msgid "Connection check"
 msgstr "连通性测试"
+
+msgctxt "Connection check"
+msgid "Check"
+msgstr "检测"
 
 msgid "Baidu"
 msgstr "百度"
