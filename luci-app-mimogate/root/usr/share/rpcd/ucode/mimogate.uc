@@ -118,8 +118,34 @@ function readConfig(args, reply) {
 	reply({ ok: true, content, saved });
 }
 
+function stripPanelKeys(text) {
+	const out = [];
+	let skip = false;
+	let first = true;
+	for (let line in split(text, '\n')) {
+		let check = replace(line, /\r$/, '');
+		if (first) {
+			check = replace(check, /^\xef\xbb\xbf/, '');
+			first = false;
+		}
+		if (match(check, /^(external-controller(-tls)?|external-ui(-url)?|secret):([ \t]|$)/)) {
+			skip = true;
+			continue;
+		}
+		if (skip) {
+			if (match(check, /^[ \t]+/))
+				continue;
+			skip = false;
+			if (check == '' && (!length(out) || replace(out[length(out) - 1], /\r$/, '') == ''))
+				continue;
+		}
+		push(out, line);
+	}
+	return join('\n', out);
+}
+
 function validateInput(args, reply, save) {
-	const content = args.content;
+	let content = args.content;
 	if (saving)
 		return reply(failure('Another configuration check is already in progress. Please try again shortly.'));
 	if (type(content) != 'string' || !length(trim(content)) || index(content, chr(0)) >= 0)
@@ -128,6 +154,8 @@ function validateInput(args, reply, save) {
 		return reply(failure('The configuration file exceeds the 48 KiB web editor limit.'));
 	if (!fs.access(core, 'x'))
 		return reply(failure('Mihomo core was not found.'));
+	if (save)
+		content = stripPanelKeys(content);
 
 	if (!fs.stat(directory) && !fs.mkdir(directory, 0o700) && !fs.stat(directory))
 		return reply(failure('Could not create the configuration directory.'));
@@ -161,7 +189,7 @@ function validateInput(args, reply, save) {
 		if (save && !fs.rename(candidate, config))
 			return finish(failure('Could not save the configuration file.'));
 
-		finish({ ok: true });
+		finish(save ? { ok: true, content } : { ok: true });
 	});
 }
 
@@ -340,7 +368,7 @@ return {
 		save_acl: { args: { mode: '', entries: '' }, call: rootOnly(saveAcl) },
 		read_settings: { call: rootOnly(readSettings) },
 		save_settings: {
-			args: { panel_enabled: true, panel_port: '', panel_secret: '', quic_reject: true, ipv6_support: true },
+			args: { panel_enabled: false, panel_port: '', panel_secret: '', quic_reject: true, ipv6_support: true },
 			call: rootOnly(saveSettings)
 		},
 		connection_check: { args: { site: '' }, call: rootOnly(connectionCheck) },

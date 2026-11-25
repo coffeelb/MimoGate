@@ -139,8 +139,9 @@ return view.extend({
 					return;
 				}
 
-				savedContent = text;
-				editor.value = text;
+				const finalText = typeof res.content === 'string' ? res.content : text;
+				savedContent = finalText;
+				editor.value = finalText;
 				if (!apply)
 					return;
 
