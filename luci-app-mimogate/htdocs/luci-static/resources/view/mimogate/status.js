@@ -28,6 +28,11 @@ const serviceAction = rpc.declare({
 });
 
 const STATUS_CSS = `
+.mimogate-status-page {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
 .mimogate-conn-status {
 	display: inline-block;
 	margin-left: .6em;
@@ -184,7 +189,7 @@ return view.extend({
 		window.setTimeout(() => syncAllLogs(), 0);
 		poll.add(() => document.hidden ? Promise.resolve() : syncAllLogs(), POLL_INTERVAL);
 
-		return E('div', { 'class': 'cbi-map' }, [
+		return E('div', { 'class': 'cbi-map mimogate-status-page' }, [
 			E('style', [ STATUS_CSS ]),
 			E('div', { 'class': 'cbi-section' }, [
 				E('h3', _('Connection check')),
