@@ -436,25 +436,25 @@ return view.extend({
 			row(_('Routing ports'), [
 				portsInput,
 				E('div', { 'class': 'cbi-value-description' },
-					_('TCP and UDP destination ports outside this list bypass Mihomo. Separate ports with commas (,).'))
+					_('Specify ports to proxy, separated by commas.'))
 			]),
 			row(_('Enable panel'), [
 				panelBox,
 				E('div', { 'class': 'cbi-value-description' },
-					_('Enables the Mihomo API and Zashboard web UI. The dashboard is downloaded on first use.'))
+					_('Dashboard assets are downloaded automatically on first use.'))
 			]),
 			panelPortRow,
 			panelSecretRow,
 			openPanelRow,
+			row(_('IPv6 support'), [
+				ipv6Box,
+				E('div', { 'class': 'cbi-value-description' },
+					_('Flexibly handle IPv6 traffic together with your configuration.'))
+			]),
 			row(_('Reject QUIC'), [
 				quicBox,
 				E('div', { 'class': 'cbi-value-description' },
 					_('Rejects proxied QUIC (UDP 80/443) so applications fall back to TCP immediately. Direct traffic is unaffected.'))
-			]),
-			row(_('IPv6 support'), [
-				ipv6Box,
-				E('div', { 'class': 'cbi-value-description' },
-					_('Proxy IPv6 traffic via the firewall (requires ipv6: true in config.yaml). When disabled, proxied IPv6 is rejected to fall back to IPv4 while direct IPv6 is unaffected.'))
 			]),
 			row(_('Mainland China IP'), [
 				E('div', { 'style': 'display:flex; align-items:center; gap:.75em; flex-wrap:wrap' }, [ updateCnBtn, cnStateEl ]),

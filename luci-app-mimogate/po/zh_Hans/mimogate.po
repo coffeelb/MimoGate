@@ -61,8 +61,8 @@ msgstr "配置超出网页传输上限。"
 msgid "Intercepted ports"
 msgstr "接管端口"
 
-msgid "TCP and UDP destination ports outside this list bypass Mihomo. Separate ports with commas (,)."
-msgstr "名单外的 TCP 和 UDP 目标端口绕过 Mihomo。请用英文逗号（,）分隔端口。"
+msgid "Specify ports to proxy, separated by commas."
+msgstr "指定代理的端口，用逗号隔开。"
 
 msgid "Unable to apply port bypass."
 msgstr "无法应用防火墙端口绕过。"
@@ -268,8 +268,8 @@ msgstr "已禁用"
 msgid "Enable panel"
 msgstr "启用面板"
 
-msgid "Enables the Mihomo API and Zashboard web UI. The dashboard is downloaded on first use."
-msgstr "启用 Mihomo API 与 Zashboard 网页控制台，首次使用时自动下载面板资源。"
+msgid "Dashboard assets are downloaded automatically on first use."
+msgstr "首次使用时自动下载面板资源。"
 
 msgid "Panel port"
 msgstr "面板端口"
@@ -316,8 +316,8 @@ msgstr "路由端口"
 msgid "Reveal/hide password"
 msgstr "显示/隐藏密码"
 
-msgid "Proxy IPv6 traffic via the firewall (requires ipv6: true in config.yaml). When disabled, proxied IPv6 is rejected to fall back to IPv4 while direct IPv6 is unaffected."
-msgstr "通过防火墙接管 IPv6 流量（需在 config.yaml 中启用 ipv6: true）；关闭后拒绝需代理的 IPv6 流量以回落到 IPv4，直连 IPv6 不受影响。"
+msgid "Flexibly handle IPv6 traffic together with your configuration."
+msgstr "配合配置文件灵活接管 IPv6 流量。"
 
 msgid "Checking..."
 msgstr "检测中..."
