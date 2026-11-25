@@ -6,8 +6,9 @@
 include $(TOPDIR)/rules.mk
 
 PKG_VERSION:=0.1.1
-PKG_RELEASE:=19
+PKG_RELEASE:=21
 PKG_LICENSE:=GPL-3.0-only
+PKG_LICENSE_FILES:=LICENSE
 PKG_PO_VERSION:=$(PKG_VERSION)-r$(PKG_RELEASE)
 
 LUCI_TITLE:=MimoGate - minimal Mihomo service control and YAML config editor

@@ -24,4 +24,4 @@ save the new list to cache so it takes effect on the next restart.
 
 The bundled cn.nft is generated from MetaCubeX/meta-rules-dat at
 https://github.com/MetaCubeX/meta-rules-dat/blob/ca7d9d641cf31a25d465861d8af0352e6721b6e0/geo/geoip/cn.list
-and is distributed under GPL-3.0 with LICENSE.cn-list.
+and is distributed under GPL-3.0 (see LICENSE).

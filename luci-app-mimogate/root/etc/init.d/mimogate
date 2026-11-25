@@ -172,89 +172,35 @@ save_acl() (
 )
 
 load_settings() {
-	panel_enabled=1
+	panel_enabled=0
 	panel_port=9090
 	panel_secret=666V888c
 	quic_reject=1
 	ipv6_support=1
 	local line key val
-	if [ -f "$SETTINGS_CONFIG" ]; then
-		while IFS= read -r line; do
-			key="${line%%=*}"
-			val="${line#*=}"
-			case "$key" in
-				panel_enabled) [ "$val" = 0 ] && panel_enabled=0 || panel_enabled=1 ;;
-				panel_port)
-					case "$val" in
-						''|*[!0-9]*) ;;
-						*) [ "$val" -ge 1 ] && [ "$val" -le 65535 ] && panel_port="$val" ;;
-					esac
-					;;
-				panel_secret) panel_secret="$val" ;;
-				quic_reject) [ "$val" = 0 ] && quic_reject=0 || quic_reject=1 ;;
-				ipv6_support) [ "$val" = 0 ] && ipv6_support=0 || ipv6_support=1 ;;
-			esac
-		done < "$SETTINGS_CONFIG"
-	fi
-	if [ -s "$CONFIG" ] && { [ ! -f "$SETTINGS_CONFIG" ] || [ "$CONFIG" -nt "$SETTINGS_CONFIG" ]; }; then
-		while IFS= read -r line; do
-			key="${line%%=*}"
-			val="${line#*=}"
-			case "$key" in
-				panel_enabled) panel_enabled="$val" ;;
-				panel_port) panel_port="$val" ;;
-				panel_secret) panel_secret="$val" ;;
-			esac
-		done <<-EOF
-			$(awk '
-				function clean(s,   q) {
-					sub(/^[ \t]+/, "", s)
-					if (substr(s, 1, 1) == "\"" || substr(s, 1, 1) == "\x27") {
-						q = substr(s, 1, 1)
-						sub(/^["\x27]/, "", s)
-						sub(q "[ \t]*(#.*)?$", "", s)
-						if (q == "\"") {
-							gsub(/\\"/, "\"", s)
-							gsub(/\\\\/, "\\", s)
-						}
-					} else {
-						sub(/[ \t]*#.*$/, "", s)
-						sub(/[ \t]+$/, "", s)
-					}
-					return s
-				}
-				NR == 1 { sub(/^\357\273\277/, "") }
-				{ sub(/\r$/, "") }
-				/^external-controller:[ \t]*/ {
-					v = clean(substr($0, 21))
-					if (v == "" || v == "null" || v == "~") {
-						pe = "0"
-					} else if (match(v, /:[0-9]+$/)) {
-						p = substr(v, RSTART + 1, RLENGTH - 1) + 0
-						if (p >= 1 && p <= 65535) {
-							pe = "1"
-							pp = p
-						}
-					}
-				}
-				/^secret:[ \t]*/ {
-					has_secret = 1
-					ps = clean(substr($0, 8))
-				}
-				END {
-					print "panel_enabled=" (pe != "" ? pe : "0")
-					if (pp != "") print "panel_port=" pp
-					if (has_secret) print "panel_secret=" ps
-				}
-			' "$CONFIG")
-		EOF
-	fi
+	[ -f "$SETTINGS_CONFIG" ] || return 0
+	while IFS= read -r line; do
+		key="${line%%=*}"
+		val="${line#*=}"
+		case "$key" in
+			panel_enabled) [ "$val" = 1 ] && panel_enabled=1 || panel_enabled=0 ;;
+			panel_port)
+				case "$val" in
+					''|*[!0-9]*) ;;
+					*) [ "$val" -ge 1 ] && [ "$val" -le 65535 ] && panel_port="$val" ;;
+				esac
+				;;
+			panel_secret) panel_secret="$val" ;;
+			quic_reject) [ "$val" = 0 ] && quic_reject=0 || quic_reject=1 ;;
+			ipv6_support) [ "$val" = 0 ] && ipv6_support=0 || ipv6_support=1 ;;
+		esac
+	done < "$SETTINGS_CONFIG"
 }
 
 save_settings() (
 	umask 077
-	local pe="${1:-1}" pp="${2:-9090}" ps="${3:-}" qr="${4:-1}" v6="${5:-1}" staged
-	[ "$pe" = 0 ] || pe=1
+	local pe="${1:-0}" pp="${2:-9090}" ps="${3:-}" qr="${4:-1}" v6="${5:-1}" staged
+	[ "$pe" = 1 ] || pe=0
 	[ "$qr" = 0 ] || qr=1
 	[ "$v6" = 0 ] || v6=1
 	case "$pp" in
@@ -316,6 +262,7 @@ prepare_runtime_config() (
 				print "external-ui-url: \"" panel_url "\""
 			} else {
 				print "external-controller: \"\""
+				print "external-controller-tls: \"\""
 			}
 			print "tun:"
 			print "  <<: *mimogateTun"

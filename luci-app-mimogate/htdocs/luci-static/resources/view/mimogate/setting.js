@@ -126,7 +126,7 @@ return view.extend({
 			ports: '',
 			aclMode: 'all',
 			aclEntries: '',
-			panelEnabled: true,
+			panelEnabled: false,
 			panelPort: '9090',
 			panelSecret: '666V888c',
 			quicReject: true,
@@ -183,7 +183,7 @@ return view.extend({
 			'aria-label': _('Intercepted ports'),
 			'disabled': 'disabled'
 		});
-		const panelBox = E('input', { 'type': 'checkbox', 'checked': 'checked', 'disabled': 'disabled' });
+		const panelBox = E('input', { 'type': 'checkbox', 'disabled': 'disabled' });
 		const panelPortInput = E('input', {
 			'type': 'text',
 			'class': 'cbi-input-text',
@@ -330,12 +330,6 @@ return view.extend({
 				tick();
 			}
 			try {
-				const portRes = await applyPorts(portsInput.value);
-				if (!portRes?.ok)
-					throw new Error(rpcError(portRes, _('Unable to apply port bypass.')));
-				portsInput.value = portRes.ports;
-				saved.ports = portRes.ports;
-
 				const setRes = await saveSettings(
 					panelBox.checked,
 					panelPortInput.value,
@@ -365,14 +359,22 @@ return view.extend({
 				saved.aclMode = aclRes.mode;
 				saved.aclEntries = aclRes.entries;
 
-				const wantEnabled = enableBox.checked;
-				await runInit(wantEnabled ? 'enable' : 'disable');
-				saved.enabled = wantEnabled;
+				const portRes = await applyPorts(portsInput.value);
+				if (!portRes?.ok)
+					throw new Error(rpcError(portRes, _('Unable to apply port bypass.')));
+				portsInput.value = portRes.ports;
+				saved.ports = portRes.ports;
 
-				if (!apply)
+				const wantEnabled = enableBox.checked;
+				if (!apply) {
+					await runInit(wantEnabled ? 'enable' : 'disable');
+					saved.enabled = wantEnabled;
 					return;
+				}
 
 				await runInit(wantEnabled ? 'restart' : 'stop');
+				await runInit(wantEnabled ? 'enable' : 'disable');
+				saved.enabled = wantEnabled;
 				await new Promise((resolve) => window.setTimeout(resolve, wantEnabled ? 1200 : 600));
 				await syncStatus();
 				stopApplyCountdown();
@@ -505,15 +507,21 @@ return view.extend({
 				L.resolveDefault(readAcl(), null),
 				L.resolveDefault(getHostHints(), {})
 			]).then(([ bootRes, portsRes, setRes, aclRes, hosts ]) => {
+				let loadOk = true;
 				if (bootRes?.ok) {
 					saved.enabled = !!bootRes.enabled;
 					enableBox.checked = saved.enabled;
+				}
+				else {
+					loadOk = false;
+					ui.addNotification(null, E('p', rpcError(bootRes, _('Unable to read service boot status.'))), 'danger');
 				}
 				if (portsRes?.ok) {
 					saved.ports = portsRes.ports;
 					portsInput.value = saved.ports;
 				}
-				else if (portsRes != null) {
+				else {
+					loadOk = false;
 					ui.addNotification(null, E('p', rpcError(portsRes, _('Unable to read the port list.'))), 'danger');
 				}
 				if (setRes?.ok) {
@@ -530,7 +538,9 @@ return view.extend({
 					renderPanelBar(saved.panelEnabled);
 				}
 				else {
-					renderPanelBar(saved.panelEnabled);
+					loadOk = false;
+					renderPanelBar(false);
+					ui.addNotification(null, E('p', rpcError(setRes, _('Unable to read settings.'))), 'danger');
 				}
 				const entries = Object.entries(hosts || {}).sort((a, b) =>
 					String(a[1]?.name || a[0]).localeCompare(String(b[1]?.name || b[0])));
@@ -550,10 +560,11 @@ return view.extend({
 					aclMode.value = saved.aclMode;
 					aclInput.value = saved.aclEntries;
 				}
-				else if (aclRes != null) {
+				else {
+					loadOk = false;
 					ui.addNotification(null, E('p', rpcError(aclRes, _('Unable to read access control settings.'))), 'danger');
 				}
-				ready = true;
+				ready = loadOk;
 				syncFormState();
 			});
 			syncStatus();

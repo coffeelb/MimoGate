@@ -222,25 +222,10 @@ function saveAcl(args, reply) {
 	});
 }
 
-function parseYamlScalar(raw) {
-	let s = trim(raw);
-	if (substr(s, 0, 1) == '"' || substr(s, 0, 1) == "'") {
-		const q = substr(s, 0, 1);
-		s = substr(s, 1);
-		const end = index(s, q);
-		if (end >= 0)
-			s = substr(s, 0, end);
-		if (q == '"')
-			s = replace(replace(s, /\\"/g, '"'), /\\\\/g, '\\');
-		return s;
-	}
-	return trim(replace(s, /[ \t]*#.*$/, ''));
-}
-
 function readSettings(_, reply) {
 	const out = {
 		ok: true,
-		panel_enabled: true,
+		panel_enabled: false,
 		panel_port: '9090',
 		panel_secret: '666V888c',
 		quic_reject: true,
@@ -259,7 +244,7 @@ function readSettings(_, reply) {
 			const k = substr(line, 0, idx);
 			const v = substr(line, idx + 1);
 			if (k == 'panel_enabled')
-				out.panel_enabled = (v != '0');
+				out.panel_enabled = (v == '1');
 			else if (k == 'panel_port' && match(v, /^[0-9]+$/))
 				out.panel_port = v;
 			else if (k == 'panel_secret')
@@ -268,41 +253,6 @@ function readSettings(_, reply) {
 				out.quic_reject = (v != '0');
 			else if (k == 'ipv6_support')
 				out.ipv6_support = (v != '0');
-		}
-	}
-
-	const cfgStat = fs.stat(config);
-	if (cfgStat?.size && (setStat == null || cfgStat.mtime > setStat.mtime)) {
-		const cfgRaw = fs.readfile(config, maxSize);
-		if (cfgRaw != null) {
-			let first = true;
-			let hasController = false;
-			for (let line in split(cfgRaw, '\n')) {
-				line = replace(line, /\r$/, '');
-				if (first) {
-					line = replace(line, /^\xef\xbb\xbf/, '');
-					first = false;
-				}
-				if (match(line, /^external-controller:[ \t]*/)) {
-					hasController = true;
-					const v = parseYamlScalar(substr(line, 20));
-					if (v == '' || v == 'null' || v == '~') {
-						out.panel_enabled = false;
-					}
-					else {
-						const m = match(v, /:([0-9]+)$/);
-						if (m && int(m[1]) >= 1 && int(m[1]) <= 65535) {
-							out.panel_enabled = true;
-							out.panel_port = m[1];
-						}
-					}
-				}
-				else if (match(line, /^secret:[ \t]*/)) {
-					out.panel_secret = parseYamlScalar(substr(line, 7));
-				}
-			}
-			if (!hasController)
-				out.panel_enabled = false;
 		}
 	}
 	reply(out);

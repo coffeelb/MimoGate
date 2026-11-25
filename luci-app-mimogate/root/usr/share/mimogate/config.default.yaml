@@ -1,8 +1,6 @@
 mode: rule
 log-level: error
 ipv6: true
-external-controller: 0.0.0.0:9090
-secret: "666V888c"
 
 proxies:
   - name: main-out
@@ -17,7 +15,6 @@ proxies:
 
 tun:
   enable: true
-  stack: mips
   auto-route: true
   auto-redirect: true
   auto-detect-interface: true

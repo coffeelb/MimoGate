@@ -29,8 +29,8 @@ Instead of bloated form-based node and rule generators, it focuses on **service 
   - Strictly synchronizes TUN and routing/firewall states using Mihomo's `-post-up` and `-post-down` hooks, automatically cleaning up rules on stop or unexpected exit to prevent stale routes.
 
 - **Integrated Zashboard Web UI**
-  - One-click toggle in Settings for the Mihomo External Controller API and [Zashboard](https://github.com/Zephyruso/zashboard) dashboard (automatically downloads the latest release assets on first use), with customizable port, secret (with reveal/hide toggle), and a quick-launch button.
-  - Automatically syncs panel settings with `config.yaml`.
+  - One-click toggle in Settings for the Mihomo External Controller API and [Zashboard](https://github.com/Zephyruso/zashboard) dashboard (disabled by default; automatically downloads the latest release assets on first use), with customizable port, secret (with reveal/hide toggle), and a quick-launch button.
+  - Managed solely through the Settings page without touching `config.yaml`.
 
 - **Clean & Intuitive LuCI Experience (Inspired by HomeProxy)**
   - Organized into three pages: **Settings** (live status bar + General / Access control tabs), **Configuration management** (raw YAML editor + validation + Load default config), and **Service status** (Baidu/Google connection check + separate auto-refreshing **MimoGate log** and **Mihomo log** viewers).
@@ -117,5 +117,5 @@ MimoGate does not override `ipv6` or `dns.ipv6` in `config.yaml`. The **IPv6 sup
 ## License
 
 - `luci-app-mimogate` is licensed under the [GNU General Public License v3.0](LICENSE) (`GPL-3.0-only`).
-- The bundled `cn.nft` is generated from `MetaCubeX/meta-rules-dat` and distributed under [GPL-3.0](luci-app-mimogate/root/usr/share/mimogate/LICENSE.cn-list).
+- The bundled `cn.nft` is generated from `MetaCubeX/meta-rules-dat` and distributed under [GPL-3.0](LICENSE).
 - `mihomo-meta` is licensed under `GPL-3.0+`.
