@@ -306,10 +306,27 @@ return view.extend({
 				return;
 
 			busy = true;
+			let applyTimer = null;
+			const stopApplyCountdown = () => {
+				if (applyTimer != null) {
+					window.clearTimeout(applyTimer);
+					applyTimer = null;
+				}
+			};
 			if (apply) {
-				ui.showModal(_('Applying configuration changes'), [
-					E('p', { 'class': 'spinning' }, _('Waiting for changes to be applied...'))
-				]);
+				const deadline = Date.now() + (L.env.apply_rollback || 90) * 1000;
+				let ts = Date.now();
+				const tick = () => {
+					const now = Date.now();
+					ui.changes.displayStatus('notice spinning',
+						E('p', _('Applying configuration changes… %ds')
+							.format(Math.max(Math.floor((deadline - Date.now()) / 1000), 0))));
+					if (now >= deadline)
+						return;
+					applyTimer = window.setTimeout(tick, Math.max(1000 - (now - ts), 0));
+					ts = now;
+				};
+				tick();
 			}
 			try {
 				await m.save();
@@ -352,6 +369,7 @@ return view.extend({
 
 				const wantEnabled = d.enabled === '1';
 				await runInit(wantEnabled ? 'enable' : 'disable');
+				await m.reset();
 
 				if (!apply) {
 					ui.addNotification(null, E('p', _('Saved. Restart MimoGate to apply changes.')), 'info');
@@ -361,17 +379,19 @@ return view.extend({
 				await runInit(wantEnabled ? 'restart' : 'stop');
 				await new Promise((resolve) => window.setTimeout(resolve, wantEnabled ? 1200 : 600));
 				await syncStatus();
-				ui.showModal(_('Applying configuration changes'), [
-					E('p', {}, _('Configuration changes have been applied.'))
-				]);
-				await new Promise((resolve) => window.setTimeout(resolve, 1000));
+				stopApplyCountdown();
+				ui.changes.displayStatus('notice',
+					E('p', _('Configuration changes applied.')));
+				await new Promise((resolve) => window.setTimeout(resolve, (L.env.apply_display || 1.5) * 1000));
 			}
 			catch (e) {
 				ui.addNotification(null, E('p', e.message), 'danger');
 			}
 			finally {
-				if (apply)
-					ui.hideModal();
+				if (apply) {
+					stopApplyCountdown();
+					ui.changes.displayStatus(false);
+				}
 				busy = false;
 			}
 		};
