@@ -204,13 +204,6 @@ check_runtime_config() {
 		-post-up "$ROUTING_UP" -post-down "$ROUTING_DOWN"
 }
 
-update_port_rules() {
-	nft -f - <<-EOF
-		flush set inet mimogate ports
-		add element inet mimogate ports { $1 }
-	EOF
-}
-
 build_cn_nft() {
 	awk '
 		{ sub(/\r$/, "") }

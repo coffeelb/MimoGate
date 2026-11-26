@@ -17,6 +17,9 @@ const getStatus = rpc.declare({ object: 'mimogate', method: 'status', reject: tr
 const getVersion = rpc.declare({ object: 'mimogate', method: 'version', reject: true });
 const getHostHints = rpc.declare({ object: 'luci-rpc', method: 'getHostHints', expect: { '': {} } });
 const updateCn = rpc.declare({ object: 'mimogate', method: 'update_cn', reject: true });
+const serviceAction = rpc.declare({
+	object: 'mimogate', method: 'service_action', params: [ 'action' ], reject: true
+});
 
 const STATUS_CSS = `
 :root {
@@ -84,6 +87,24 @@ function rpcError(res, fallback) {
 }
 
 return view.extend({
+	handleSaveApply(ev, mode) {
+		return this.super('handleSaveApply', [ ev, mode ]).then(async () => {
+			await uci.load('mimogate');
+			if (uci.get('mimogate', 'config', 'enabled') !== '1')
+				return;
+			const st = await L.resolveDefault(getStatus(), null);
+			if (!st?.running) {
+				for (const action of [ 'enable', 'start' ]) {
+					const res = await serviceAction(action);
+					if (!res?.ok)
+						throw new Error(rpcError(res, _('Service action failed.')));
+				}
+			}
+		}).then(() => this._syncStatus?.()).catch(e => {
+			ui.addNotification(null, E('p', e.message), 'danger');
+		});
+	},
+
 	load() {
 		return Promise.all([
 			L.resolveDefault(getStatus(), null),
@@ -139,6 +160,7 @@ return view.extend({
 			renderPanelBar(uci.get('mimogate', 'config', 'panel_enabled') === '1');
 			return L.resolveDefault(getStatus(), null).then(st => renderStatus(st?.ok ? st : null));
 		};
+		this._syncStatus = syncStatus;
 
 		renderStatus(statusRes?.ok ? statusRes : null);
 		renderPanelBar(uci.get('mimogate', 'config', 'panel_enabled') === '1');
