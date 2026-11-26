@@ -40,10 +40,6 @@ function errorText(result) {
 }
 
 return view.extend({
-	handleSave: null,
-	handleSaveApply: null,
-	handleReset: null,
-
 	load() {
 		return readConfig(false).catch(error => ({ ok: false, message: error.message }));
 	},
@@ -179,6 +175,10 @@ return view.extend({
 			clearOutput();
 		};
 
+		this.handleSave = save(false);
+		this.handleSaveApply = save(true);
+		this.handleReset = reset;
+
 		return E('div', { 'class': 'cbi-map' }, [
 			E('h3', _('MimoGate configuration management')),
 			E('div', { 'class': 'cbi-map-descr' },
@@ -192,13 +192,6 @@ return view.extend({
 						E('button', { 'type': 'button', 'class': 'btn cbi-button cbi-button-action', 'click': check }, _('Check'))
 					])
 				])
-			]),
-			E('div', { 'class': 'cbi-page-actions' }, [
-				E('button', { 'type': 'button', 'class': 'btn cbi-button cbi-button-apply', 'click': save(true) }, _('Save & Apply')),
-				' ',
-				E('button', { 'type': 'button', 'class': 'btn cbi-button cbi-button-save', 'click': save(false) }, _('Save')),
-				' ',
-				E('button', { 'type': 'button', 'class': 'btn cbi-button cbi-button-reset', 'click': reset }, _('Reset'))
 			])
 		]);
 	}
