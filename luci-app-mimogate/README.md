@@ -8,7 +8,7 @@ top-level block `tun:` section. The app keeps the saved YAML and generates
 a runtime copy with interface `mimogate0`, auto-route and auto-redirect
 disabled, and a mark for Mihomo's outbound sockets.
 
-The `proxy-ports` list selects LAN TCP/UDP ports. Router-originated TCP/UDP
+The `ports` list in `/etc/config/mimogate` selects LAN TCP/UDP ports. Router-originated TCP/UDP
 is also eligible for interception (DHCPv4/DHCPv6 client traffic is exempted;
 router-originated VPN clients such as WireGuard can set packet mark
 `0x20000000` to bypass MimoGate). Private and local destinations, inbound

@@ -87,7 +87,7 @@ make package/mimogate/luci-app-mimogate/compile V=s
 - **Configuration Limits**: The web editor supports single-document YAML files up to `48 KiB`. TUN route selection options in the original YAML (such as `auto-route`, `auto-redirect`, and `route-exclude-address`) do not control MimoGate's nftables rules; at runtime MimoGate manages the `mimogate0` interface directly.
 - **Reserved System Values**: MimoGate uses route table and policy routing priority `10900`, packet mark bits `0x40000000` and `0x20000000`, and `firewall4`'s automatic includes. Please avoid conflicts with other custom firewall scripts.
 - **Key Paths**:
-  - Config files (preserved across `sysupgrade`): `/etc/mimogate/config.yaml`, `proxy-ports`, `access-control`, `settings`
+  - Config files (preserved across `sysupgrade`): `/etc/config/mimogate`, `/etc/mimogate/config.yaml`
   - Mainland China IP cache: `/etc/mimogate/cn.nft` (bundled snapshot at `/usr/share/mimogate/cn.nft`)
   - Runtime logs: `/var/log/mimogate/mimogate.log`, `/var/log/mimogate/mihomo.log`
 
