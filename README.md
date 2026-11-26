@@ -17,13 +17,13 @@ Instead of bloated form-based node and rule generators, it focuses on **service 
 - **Dedicated nftables Transparent Proxy & Kernel-Level Split Routing**
   - Manages its own `table inet mimogate` firewall rules and policy routing without relying on Mihomo's `auto-route` / `auto-redirect`, keeping rules clean and predictable.
   - **Kernel-Level Mainland China IP Bypass**: Ships with a bundled mainland China IPv4/IPv6 CIDR dataset (`cn.nft`) that bypasses Mihomo directly in nftables to significantly reduce core load. Supports one-click online updates in LuCI, validated with `nft -c` before caching.
-  - **Selective Port Interception**: Only intercepts common ports by default (`53, 80, 443, 853, 3478, 3479, 5222, 5349, 8443, 19302, 19305`) while bypassing all other ports. Supports live port updates without restarting the service, keeping bulk traffic away from the proxy core.
+  - **Selective Port Interception**: Only intercepts common ports by default (`53, 80, 443, 853, 3478, 3479, 5222, 5349, 8443, 19302, 19305`) while bypassing all other ports, keeping bulk traffic away from the proxy core. The port list can be customized in LuCI Settings and applied via Save & Apply. When `dns.enhanced-mode: fake-ip` is configured in `config.yaml`, MimoGate automatically detects the fake-ip IPv4/IPv6 ranges and routes them to the proxy regardless of port.
   - **Smart Local & Forwarded Traffic Bypass**: Automatically bypasses private/reserved addresses and inbound port forwards (DNAT). Supports intercepting router-originated traffic while exempting DHCPv4/DHCPv6 and allowing bypass via packet mark `0x20000000` (e.g., for router-based VPN clients like WireGuard).
 
 - **LAN Access Control (ACL) & Direct DNS Bypass**
   - Supports three modes: **All LAN devices**, **Bypass listed devices**, and **Proxy listed devices only**.
   - Matches devices by **MAC, IPv4, IPv6, or CIDR**, with a built-in online device picker (selecting MAC addresses is recommended to cover both IPv4 and IPv6).
-  - For bypassed LAN devices, automatically DNATs their IPv4 DNS queries (port 53) to a direct DNS server (`223.5.5.5`) in nftables so direct devices are unaffected by proxy DNS.
+  - For bypassed LAN devices, automatically DNATs their router-bound IPv4 DNS queries (port 53) to a direct DNS server (`223.5.5.5` by default; customizable via UCI `mimogate.config.direct_dns`) and rejects router-bound IPv6 DNS queries so dual-stack clients immediately fall back to direct IPv4 DNS without hitting Mihomo DNS (note: local `.lan` hostnames are not resolved by `dnsmasq` for bypassed devices).
 
 - **Reliable Lifecycle Management**
   - Strictly synchronizes TUN and routing/firewall states using Mihomo's `-post-up` and `-post-down` hooks, automatically cleaning up rules on stop or unexpected exit to prevent stale routes.
