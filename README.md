@@ -17,7 +17,7 @@ Instead of bloated form-based node and rule generators, it focuses on **service 
 - **Dedicated nftables Transparent Proxy & Kernel-Level Split Routing**
   - Manages its own `table inet mimogate` firewall rules and policy routing without relying on Mihomo's `auto-route` / `auto-redirect`, keeping rules clean and predictable.
   - **Kernel-Level Mainland China IP Bypass**: Ships with a bundled mainland China IPv4/IPv6 CIDR dataset (`cn.nft`) that bypasses Mihomo directly in nftables to significantly reduce core load. Supports one-click online updates in LuCI, validated with `nft -c` before caching.
-  - **Selective Port Interception**: Only intercepts common ports by default (`53, 80, 443, 853, 5222, 8443`) while bypassing all other ports. Supports live port updates without restarting the service, keeping bulk traffic away from the proxy core.
+  - **Selective Port Interception**: Only intercepts common ports by default (`53, 80, 443, 853, 3478, 3479, 5222, 5349, 8443, 19302, 19305`) while bypassing all other ports. Supports live port updates without restarting the service, keeping bulk traffic away from the proxy core.
   - **Smart Local & Forwarded Traffic Bypass**: Automatically bypasses private/reserved addresses and inbound port forwards (DNAT). Supports intercepting router-originated traffic while exempting DHCPv4/DHCPv6 and allowing bypass via packet mark `0x20000000` (e.g., for router-based VPN clients like WireGuard).
 
 - **LAN Access Control (ACL) & Direct DNS Bypass**

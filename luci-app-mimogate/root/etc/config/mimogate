@@ -1,6 +1,6 @@
 config mimogate 'config'
 	option enabled '0'
-	option ports '53, 80, 443, 853, 5222, 8443'
+	option ports '53, 80, 443, 853, 3478, 3479, 5222, 5349, 8443, 19302, 19305'
 	option panel_enabled '0'
 	option panel_port '9090'
 	option panel_secret '666V888c'
