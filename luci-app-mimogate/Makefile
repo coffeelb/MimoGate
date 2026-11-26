@@ -17,4 +17,9 @@ LUCI_PKGARCH:=all
 
 include $(TOPDIR)/feeds/luci/luci.mk
 
+define Package/luci-app-mimogate/conffiles
+/etc/config/mimogate
+/etc/mimogate/
+endef
+
 # call BuildPackage - OpenWrt buildroot signature

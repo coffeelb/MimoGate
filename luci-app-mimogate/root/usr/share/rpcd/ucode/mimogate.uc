@@ -8,11 +8,7 @@ const core = '/usr/bin/mihomo';
 const init = '/etc/init.d/mimogate';
 const directory = '/etc/mimogate';
 const config = directory + '/config.yaml';
-const portsFile = directory + '/proxy-ports';
-const aclFile = directory + '/access-control';
-const settingsFile = directory + '/settings';
 const cnCache = directory + '/cn.nft';
-const defaultPortsFile = '/usr/share/mimogate/proxy-ports.default';
 const template = '/usr/share/mimogate/config.default.yaml';
 const maxSize = 48 * 1024;
 let saving = false;
@@ -95,14 +91,6 @@ function version(_, reply) {
 		reply(result?.code == 0
 			? { ok: true, version: trim(result.stdout ?? '') }
 			: failure('Could not read Mihomo version.'));
-	});
-}
-
-function bootStatus(_, reply) {
-	exec(init, [ 'enabled' ], result => {
-		reply(result?.code == 0 || result?.code == 1
-			? { ok: true, enabled: result.code == 0 }
-			: failure('Could not read boot status.'));
 	});
 }
 
@@ -193,125 +181,6 @@ function validateInput(args, reply, save) {
 	});
 }
 
-function readPorts(_, reply) {
-	const saved = fs.stat(portsFile) != null;
-	const ports = trim(fs.readfile(saved ? portsFile : defaultPortsFile, 4097) ?? '');
-	if (!ports || length(ports) > 4096)
-		return reply(failure('Could not read the saved interception ports.'));
-
-	reply({ ok: true, ports, saved });
-}
-
-function applyPorts(args, reply) {
-	const ports = args.ports;
-	if (type(ports) != 'string' || length(ports) > 4096 || index(ports, chr(0)) >= 0)
-		return reply(failure('Interception port input is invalid or too long.'));
-
-	exec(init, [ 'apply_ports', ports ], result => {
-		if (result?.code != 0)
-			return reply(failure('Could not apply firewall port rules.', trim(result?.stderr ?? '')));
-		const lines = split(trim(result.stdout ?? ''), '\n', 2);
-		const response = { ok: true, ports: lines[0] };
-		if (lines[1] == 'deferred')
-			response.deferred = true;
-		reply(response);
-	});
-}
-
-function readAcl(_, reply) {
-	if (fs.stat(aclFile) == null)
-		return reply({ ok: true, mode: 'all', entries: '' });
-
-	const raw = fs.readfile(aclFile, 4200);
-	if (raw == null || length(raw) > 4160)
-		return reply(failure('Could not read access control settings.'));
-
-	const lines = split(trim(raw), '\n', 2);
-	const mode = lines[0];
-	if (index([ 'all', 'bypass', 'proxy' ], mode) < 0)
-		return reply(failure('Could not read access control settings.'));
-
-	reply({ ok: true, mode, entries: trim(lines[1] ?? '') });
-}
-
-function saveAcl(args, reply) {
-	const mode = args.mode;
-	const entries = args.entries ?? '';
-	if (index([ 'all', 'bypass', 'proxy' ], mode) < 0)
-		return reply(failure('Invalid access control mode.'));
-	if (type(entries) != 'string' || length(entries) > 4096 || index(entries, chr(0)) >= 0)
-		return reply(failure('Access control list is invalid or too long.'));
-
-	exec(init, [ 'save_acl', mode, entries ], result => {
-		if (result?.code != 0)
-			return reply(failure('Could not save access control settings.', trim(result?.stderr ?? '')));
-		const lines = split(trim(result.stdout ?? ''), '\n', 2);
-		reply({ ok: true, mode: lines[0] || mode, entries: trim(lines[1] ?? '') });
-	});
-}
-
-function readSettings(_, reply) {
-	const out = {
-		ok: true,
-		panel_enabled: false,
-		panel_port: '9090',
-		panel_secret: '666V888c',
-		quic_reject: true,
-		ipv6_support: true
-	};
-	const setStat = fs.stat(settingsFile);
-	if (setStat != null) {
-		const raw = fs.readfile(settingsFile, 4096);
-		if (raw == null)
-			return reply(failure('Could not read settings.'));
-
-		for (let line in split(raw, '\n')) {
-			const idx = index(line, '=');
-			if (idx <= 0)
-				continue;
-			const k = substr(line, 0, idx);
-			const v = substr(line, idx + 1);
-			if (k == 'panel_enabled')
-				out.panel_enabled = (v == '1');
-			else if (k == 'panel_port' && match(v, /^[0-9]+$/))
-				out.panel_port = v;
-			else if (k == 'panel_secret')
-				out.panel_secret = v;
-			else if (k == 'quic_reject')
-				out.quic_reject = (v != '0');
-			else if (k == 'ipv6_support')
-				out.ipv6_support = (v != '0');
-		}
-	}
-	reply(out);
-}
-
-function saveSettings(args, reply) {
-	const panelEnabled = args.panel_enabled ? '1' : '0';
-	const panelPort = trim('' + (args.panel_port ?? '9090'));
-	const panelSecret = '' + (args.panel_secret ?? '');
-	const quicReject = args.quic_reject ? '1' : '0';
-	const ipv6Support = args.ipv6_support ? '1' : '0';
-
-	if (!match(panelPort, /^[0-9]+$/) || int(panelPort) < 1 || int(panelPort) > 65535)
-		return reply(failure('Panel port must be between 1 and 65535.'));
-	if (length(panelSecret) > 128 || index(panelSecret, '\n') >= 0 || index(panelSecret, '\r') >= 0 || index(panelSecret, chr(0)) >= 0)
-		return reply(failure('Panel secret is invalid or too long.'));
-
-	exec(init, [ 'save_settings', panelEnabled, panelPort, panelSecret, quicReject, ipv6Support ], result => {
-		if (result?.code != 0)
-			return reply(failure('Could not save settings.', trim(result?.stderr ?? '')));
-		reply({
-			ok: true,
-			panel_enabled: panelEnabled == '1',
-			panel_port: panelPort,
-			panel_secret: panelSecret,
-			quic_reject: quicReject == '1',
-			ipv6_support: ipv6Support == '1'
-		});
-	});
-}
-
 function connectionCheck(args, reply) {
 	const urls = {
 		baidu: 'https://www.baidu.com',
@@ -361,16 +230,6 @@ return {
 	mimogate: {
 		status: { call: rootOnly(status) },
 		version: { call: rootOnly(version) },
-		boot_status: { call: rootOnly(bootStatus) },
-		read_ports: { call: rootOnly(readPorts) },
-		apply_ports: { args: { ports: '' }, call: rootOnly(applyPorts) },
-		read_acl: { call: rootOnly(readAcl) },
-		save_acl: { args: { mode: '', entries: '' }, call: rootOnly(saveAcl) },
-		read_settings: { call: rootOnly(readSettings) },
-		save_settings: {
-			args: { panel_enabled: false, panel_port: '', panel_secret: '', quic_reject: true, ipv6_support: true },
-			call: rootOnly(saveSettings)
-		},
 		connection_check: { args: { site: '' }, call: rootOnly(connectionCheck) },
 		update_cn: { call: rootOnly(updateCn) },
 		read_config: { args: { defaults: false }, call: rootOnly(readConfig) },

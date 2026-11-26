@@ -29,14 +29,11 @@ esac
 START=99
 STOP=10
 USE_PROCD=1
-EXTRA_COMMANDS="clear_log clear_mihomo_log apply_ports save_acl save_settings dnsmasq_up stop_routing wan_online update_cn"
+EXTRA_COMMANDS="clear_log clear_mihomo_log dnsmasq_up stop_routing wan_online update_cn"
 
 CORE=/usr/bin/mihomo
 WORKDIR=/etc/mimogate
 CONFIG="$WORKDIR/config.yaml"
-PORTS_CONFIG="$WORKDIR/proxy-ports"
-ACL_CONFIG="$WORKDIR/access-control"
-SETTINGS_CONFIG="$WORKDIR/settings"
 PANEL_UI_URL=https://github.com/Zephyruso/zashboard/releases/latest/download/dist-no-fonts.zip
 DEFAULT_PORTS_CONFIG=/usr/share/mimogate/proxy-ports.default
 LOG_DIR=/var/log/mimogate
@@ -137,94 +134,18 @@ emit_acl_sets() {
 		}'
 }
 
-save_acl() (
-	umask 077
-	local mode="${1:-all}" entries sets staged
-	case "$mode" in
-		all|bypass|proxy) ;;
-		*)
-			echo 'Invalid access control mode.' >&2
-			return 1
-			;;
-	esac
-	if ! entries="$(normalize_acl_entries "${2:-}")"; then
-		echo 'Enter valid MAC addresses, IPv4/IPv6 addresses, or CIDRs.' >&2
-		return 1
-	fi
-	if [ -n "$entries" ]; then
-		sets="$(emit_acl_sets "$entries")"
-		if ! { printf 'table inet mimogate_acl_check {\n%s\n}\n' "$sets" | nft -c -f - >/dev/null 2>&1; }; then
-			echo 'Access control list contains an invalid MAC or IP address.' >&2
-			return 1
-		fi
-	fi
-	mkdir -p "$WORKDIR" || return 1
-	staged="$(mktemp "$WORKDIR/.acl.XXXXXX")" || return 1
-	trap 'rm -f "$staged"' EXIT
-	if printf '%s\n%s\n' "$mode" "$entries" > "$staged" && mv -f "$staged" "$ACL_CONFIG"; then
-		trap - EXIT
-		log_ports "Saved access control (mode: $mode). Restart MimoGate to apply it."
-		printf '%s\n%s\n' "$mode" "$entries"
-		return 0
-	fi
-	echo 'Could not save access control settings.' >&2
-	return 1
-)
-
 load_settings() {
-	panel_enabled=0
-	panel_port=9090
-	panel_secret=666V888c
-	quic_reject=1
-	ipv6_support=1
-	local line key val
-	[ -f "$SETTINGS_CONFIG" ] || return 0
-	while IFS= read -r line; do
-		key="${line%%=*}"
-		val="${line#*=}"
-		case "$key" in
-			panel_enabled) [ "$val" = 1 ] && panel_enabled=1 || panel_enabled=0 ;;
-			panel_port)
-				case "$val" in
-					''|*[!0-9]*) ;;
-					*) [ "$val" -ge 1 ] && [ "$val" -le 65535 ] && panel_port="$val" ;;
-				esac
-				;;
-			panel_secret) panel_secret="$val" ;;
-			quic_reject) [ "$val" = 0 ] && quic_reject=0 || quic_reject=1 ;;
-			ipv6_support) [ "$val" = 0 ] && ipv6_support=0 || ipv6_support=1 ;;
-		esac
-	done < "$SETTINGS_CONFIG"
-}
-
-save_settings() (
-	umask 077
-	local pe="${1:-0}" pp="${2:-9090}" ps="${3:-}" qr="${4:-1}" v6="${5:-1}" staged
-	[ "$pe" = 1 ] || pe=0
-	[ "$qr" = 0 ] || qr=1
-	[ "$v6" = 0 ] || v6=1
-	case "$pp" in
-		''|*[!0-9]*)
-			echo 'Panel port must be between 1 and 65535.' >&2
-			return 1
-			;;
+	config_load mimogate
+	config_get_bool panel_enabled config panel_enabled 0
+	config_get panel_port config panel_port 9090
+	config_get panel_secret config panel_secret '666V888c'
+	config_get_bool quic_reject config quic_reject 1
+	config_get_bool ipv6_support config ipv6_support 1
+	case "$panel_port" in
+		''|*[!0-9]*) panel_port=9090 ;;
+		*) [ "$panel_port" -ge 1 ] && [ "$panel_port" -le 65535 ] || panel_port=9090 ;;
 	esac
-	if [ "$pp" -lt 1 ] || [ "$pp" -gt 65535 ]; then
-		echo 'Panel port must be between 1 and 65535.' >&2
-		return 1
-	fi
-	mkdir -p "$WORKDIR" || return 1
-	staged="$(mktemp "$WORKDIR/.settings.XXXXXX")" || return 1
-	trap 'rm -f "$staged"' EXIT
-	if printf 'panel_enabled=%s\npanel_port=%s\npanel_secret=%s\nquic_reject=%s\nipv6_support=%s\n' \
-		"$pe" "$pp" "$ps" "$qr" "$v6" > "$staged" && mv -f "$staged" "$SETTINGS_CONFIG"; then
-		trap - EXIT
-		log_ports "Saved settings (panel: $pe, port: $pp, quic_reject: $qr, ipv6: $v6)."
-		return 0
-	fi
-	echo 'Could not save settings.' >&2
-	return 1
-)
+}
 
 # Keep the user's YAML intact. Merge its normal block mapping into the runtime file.
 prepare_runtime_config() (
@@ -400,20 +321,25 @@ start_routing() {
 }
 
 install_routing() (
-	local ports_file="$PORTS_CONFIG" ports lan family families=-4 ipv6_bypass= ipv6_reject= cn_file= cn_source= acl_mode=all acl_entries= acl_sets=
+	local ports lan family families=-4 ipv6_bypass= ipv6_reject= cn_file= cn_source= acl_mode=all acl_entries= acl_sets= macs= ip4s= ip6s=
 	log_ports "Waiting for routing lock (PID $$)."
 	routing_lock || return 1
 	log_ports "Routing lock acquired (PID $$)."
-	[ -e "$ports_file" ] || ports_file="$DEFAULT_PORTS_CONFIG"
-	ports="$(cat "$ports_file")" && ports="$(normalize_ports "$ports")" || return 1
-	if [ -s "$ACL_CONFIG" ]; then
-		acl_mode="$(sed -n '1p' "$ACL_CONFIG")"
-		acl_entries="$(sed -n '2p' "$ACL_CONFIG")"
-		case "$acl_mode" in
-			all|bypass|proxy) ;;
-			*) acl_mode=all; acl_entries= ;;
-		esac
-		if [ "$acl_mode" != all ] && [ -n "$acl_entries" ]; then
+	config_load mimogate
+	config_get ports config ports ''
+	[ -n "$ports" ] || ports="$(cat "$DEFAULT_PORTS_CONFIG")"
+	ports="$(normalize_ports "$ports")" || return 1
+	config_get acl_mode config acl_mode 'all'
+	case "$acl_mode" in
+		all|bypass|proxy) ;;
+		*) acl_mode=all ;;
+	esac
+	if [ "$acl_mode" != all ]; then
+		config_get macs config acl_mac ''
+		config_get ip4s config acl_ipv4 ''
+		config_get ip6s config acl_ipv6 ''
+		acl_entries="$macs $ip4s $ip6s"
+		if [ -n "$(printf '%s' "$acl_entries" | tr -d ' \t\r\n')" ]; then
 			acl_entries="$(normalize_acl_entries "$acl_entries")" && acl_sets="$(emit_acl_sets "$acl_entries")" || return 1
 		fi
 	fi
@@ -549,55 +475,6 @@ install_routing() (
 	return 0
 )
 
-commit_ports() (
-	umask 077
-	local staged
-	mkdir -p "$WORKDIR" || return 1
-	staged="$(mktemp -d "$WORKDIR/.proxy-ports.XXXXXX")" || return 1
-	trap 'rm -f "$staged/new" "$staged/previous"; rmdir "$staged"' EXIT
-	if [ "$2" = live ] && [ -e "$PORTS_CONFIG" ]; then
-		cp -p "$PORTS_CONFIG" "$staged/previous" || return 1
-	fi
-	printf '%s\n' "$1" > "$staged/new" && mv -f "$staged/new" "$PORTS_CONFIG" || {
-		echo 'Could not save the port list.' >&2
-		return 1
-	}
-	[ "$2" = live ] || return 0
-	update_port_rules "$1" && return 0
-
-	if [ -f "$staged/previous" ]; then
-		mv -f "$staged/previous" "$PORTS_CONFIG" || {
-			trap - EXIT
-			echo "Could not restore the saved port list. Backup: $staged/previous" >&2
-		}
-	else
-		rm -f "$PORTS_CONFIG" || echo 'Could not remove the newly saved port list.' >&2
-	fi
-	return 1
-)
-
-apply_ports() (
-	local ports error mode=deferred
-	procd_lock
-	routing_lock || return 1
-	procd_running mimogate main && nft list set inet mimogate ports >/dev/null 2>&1 && mode=live
-	if ! ports="$(normalize_ports "${1:-}")"; then
-		error='Enter ports from 1 to 65535 separated by ASCII commas (,).'
-	elif error="$(commit_ports "$ports" "$mode" 2>&1)"; then
-		printf '%s\n' "$ports"
-		if [ "$mode" = live ]; then
-			log_ports "Applied port bypass. LAN interception ports: $ports."
-		else
-			log_ports "Saved port bypass for the next start. LAN interception ports: $ports."
-			printf '%s\n' deferred
-		fi
-		return 0
-	fi
-	log_ports "Could not apply port bypass: $error"
-	printf '%s\n' "$error" >&2
-	return 1
-)
-
 log_dnsmasq() {
 	logger -t mimogate "$1"
 	if [ -f "$LOG_FILE" ]; then
@@ -641,6 +518,11 @@ wan_online() {
 }
 
 start_service() {
+	local enabled
+	config_load mimogate
+	config_get_bool enabled config enabled 0
+	[ "$enabled" = 1 ] || return 0
+
 	start_failed=1
 	rm -f "$BOOT_WAN_PENDING"
 	prepare_log && : > "$LOG_FILE" && : > "$MIHOMO_LOG_FILE" || return 1
@@ -834,7 +716,21 @@ restore_dnsmasq() {
 	fi
 }
 
+reload_service() {
+	local enabled
+	config_load mimogate
+	config_get_bool enabled config enabled 0
+	if [ "$enabled" = 1 ]; then
+		/etc/init.d/mimogate enabled || /etc/init.d/mimogate enable
+	else
+		/etc/init.d/mimogate enabled && /etc/init.d/mimogate disable
+	fi
+	stop
+	start
+}
+
 service_triggers() {
+	procd_add_reload_trigger "mimogate"
 	[ -z "${start_failed:-}" ] || return 0
 	local command=restart
 	[ "${defer_wan:-}" != 1 ] || command=wan_online

@@ -1,0 +1,57 @@
+#!/bin/sh
+
+WORKDIR=/etc/mimogate
+
+uci -q batch <<-EOF >/dev/null
+	delete ucitrack.@mimogate[0]
+	add ucitrack mimogate
+	set ucitrack.@mimogate[-1].init=mimogate
+	commit ucitrack
+EOF
+
+if /etc/init.d/mimogate enabled 2>/dev/null; then
+	uci -q set mimogate.config.enabled='1'
+fi
+
+if [ -f "$WORKDIR/proxy-ports" ]; then
+	ports="$(tr '\n' ' ' < "$WORKDIR/proxy-ports" | sed 's/^[ \t]*//;s/[ \t]*$//')"
+	[ -n "$ports" ] && uci -q set mimogate.config.ports="$ports"
+fi
+
+if [ -f "$WORKDIR/settings" ]; then
+	while IFS= read -r line; do
+		key="${line%%=*}"
+		val="${line#*=}"
+		case "$key" in
+			panel_enabled) [ "$val" = 1 ] && uci -q set mimogate.config.panel_enabled='1' || uci -q set mimogate.config.panel_enabled='0' ;;
+			panel_port) [ -n "$val" ] && uci -q set mimogate.config.panel_port="$val" ;;
+			panel_secret) uci -q set mimogate.config.panel_secret="$val" ;;
+			quic_reject) [ "$val" = 0 ] && uci -q set mimogate.config.quic_reject='0' || uci -q set mimogate.config.quic_reject='1' ;;
+			ipv6_support) [ "$val" = 0 ] && uci -q set mimogate.config.ipv6_support='0' || uci -q set mimogate.config.ipv6_support='1' ;;
+		esac
+	done < "$WORKDIR/settings"
+fi
+
+if [ -s "$WORKDIR/access-control" ]; then
+	acl_mode="$(sed -n '1p' "$WORKDIR/access-control")"
+	acl_entries="$(sed -n '2p' "$WORKDIR/access-control")"
+	case "$acl_mode" in
+		all|bypass|proxy) uci -q set mimogate.config.acl_mode="$acl_mode" ;;
+	esac
+	uci -q delete mimogate.config.acl_mac
+	uci -q delete mimogate.config.acl_ipv4
+	uci -q delete mimogate.config.acl_ipv6
+	for item in $(printf '%s' "$acl_entries" | tr ',' ' '); do
+		[ -n "$item" ] || continue
+		case "$item" in
+			??:??:??:??:??:??) uci -q add_list mimogate.config.acl_mac="$item" ;;
+			*:*) uci -q add_list mimogate.config.acl_ipv6="$item" ;;
+			*) uci -q add_list mimogate.config.acl_ipv4="$item" ;;
+		esac
+	done
+fi
+
+uci -q commit mimogate
+rm -f "$WORKDIR/proxy-ports" "$WORKDIR/settings" "$WORKDIR/access-control"
+
+exit 0

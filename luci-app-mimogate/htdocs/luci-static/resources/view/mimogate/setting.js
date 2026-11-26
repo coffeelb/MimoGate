@@ -6,39 +6,17 @@
 'require form';
 'require poll';
 'require rpc';
+'require uci';
 'require ui';
 'require view';
 'require tools.firewall as fwtool';
 
 const POLL_INTERVAL = 5;
-const MAC_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i;
 
 const getStatus = rpc.declare({ object: 'mimogate', method: 'status', reject: true });
 const getVersion = rpc.declare({ object: 'mimogate', method: 'version', reject: true });
-const getBootStatus = rpc.declare({ object: 'mimogate', method: 'boot_status', reject: true });
-const readPorts = rpc.declare({ object: 'mimogate', method: 'read_ports', reject: true });
-const applyPorts = rpc.declare({
-	object: 'mimogate', method: 'apply_ports', params: [ 'ports' ], reject: true
-});
-const readAcl = rpc.declare({ object: 'mimogate', method: 'read_acl', reject: true });
-const saveAcl = rpc.declare({
-	object: 'mimogate', method: 'save_acl', params: [ 'mode', 'entries' ], reject: true
-});
-const readSettings = rpc.declare({ object: 'mimogate', method: 'read_settings', reject: true });
-const saveSettings = rpc.declare({
-	object: 'mimogate',
-	method: 'save_settings',
-	params: [ 'panel_enabled', 'panel_port', 'panel_secret', 'quic_reject', 'ipv6_support' ],
-	reject: true
-});
 const getHostHints = rpc.declare({ object: 'luci-rpc', method: 'getHostHints', expect: { '': {} } });
 const updateCn = rpc.declare({ object: 'mimogate', method: 'update_cn', reject: true });
-const serviceAction = rpc.declare({
-	object: 'mimogate',
-	method: 'service_action',
-	params: [ 'action' ],
-	reject: true
-});
 
 const STATUS_CSS = `
 :root {
@@ -105,27 +83,17 @@ function rpcError(res, fallback) {
 	return [ res?.message ? _(res.message) : fallback, res?.detail ].filter(Boolean).join('\n');
 }
 
-async function runInit(action) {
-	const res = await serviceAction(action);
-
-	if (!res?.ok)
-		throw new Error(rpcError(res, _('Service action failed.')));
-}
-
 return view.extend({
 	load() {
 		return Promise.all([
 			L.resolveDefault(getStatus(), null),
 			L.resolveDefault(getVersion(), null),
-			L.resolveDefault(getBootStatus(), null),
-			L.resolveDefault(readPorts(), null),
-			L.resolveDefault(readSettings(), null),
-			L.resolveDefault(readAcl(), null),
+			uci.load('mimogate'),
 			L.resolveDefault(getHostHints(), {})
 		]);
 	},
 
-	render([ statusRes, verRes, bootRes, portsRes, setRes, aclRes, hosts ]) {
+	render([ statusRes, verRes, _, hosts ]) {
 		const barStateEl = E('div', { 'class': 'v' }, '—');
 		const barPanelEl = E('div', { 'class': 'v' }, '—');
 		const barCnEl = E('div', { 'class': 'v' }, '—');
@@ -167,46 +135,13 @@ return view.extend({
 				: _('Bundled snapshot'));
 		};
 
-		const syncStatus = () =>
-			L.resolveDefault(getStatus(), null).then(st => renderStatus(st?.ok ? st : null));
-
-		let loadOk = true;
-		if (!bootRes?.ok) {
-			loadOk = false;
-			ui.addNotification(null, E('p', rpcError(bootRes, _('Unable to read service boot status.'))), 'danger');
-		}
-		if (!portsRes?.ok) {
-			loadOk = false;
-			ui.addNotification(null, E('p', rpcError(portsRes, _('Unable to read the port list.'))), 'danger');
-		}
-		if (!setRes?.ok) {
-			loadOk = false;
-			ui.addNotification(null, E('p', rpcError(setRes, _('Unable to read settings.'))), 'danger');
-		}
-		if (!aclRes?.ok) {
-			loadOk = false;
-			ui.addNotification(null, E('p', rpcError(aclRes, _('Unable to read access control settings.'))), 'danger');
-		}
-
-		const aclEntries = (aclRes?.ok ? aclRes.entries : '').split(/[\s,]+/).filter(Boolean);
-		const data = {
-			settings: {
-				enabled: bootRes?.ok && bootRes.enabled ? '1' : '0',
-				ports: portsRes?.ok ? portsRes.ports : '',
-				panel_enabled: !setRes?.ok || setRes.panel_enabled ? '1' : '0',
-				panel_port: setRes?.ok ? setRes.panel_port : '9090',
-				panel_secret: setRes?.ok ? setRes.panel_secret : '666V888c',
-				ipv6_support: !setRes?.ok || setRes.ipv6_support ? '1' : '0',
-				quic_reject: !setRes?.ok || setRes.quic_reject ? '1' : '0',
-				acl_mode: aclRes?.ok ? aclRes.mode : 'all',
-				acl_mac: aclEntries.filter(x => MAC_RE.test(x)),
-				acl_ipv4: aclEntries.filter(x => !MAC_RE.test(x) && !x.includes(':')),
-				acl_ipv6: aclEntries.filter(x => !MAC_RE.test(x) && x.includes(':'))
-			}
+		const syncStatus = () => {
+			renderPanelBar(uci.get('mimogate', 'config', 'panel_enabled') === '1');
+			return L.resolveDefault(getStatus(), null).then(st => renderStatus(st?.ok ? st : null));
 		};
 
 		renderStatus(statusRes?.ok ? statusRes : null);
-		renderPanelBar(setRes?.ok ? !!setRes.panel_enabled : false);
+		renderPanelBar(uci.get('mimogate', 'config', 'panel_enabled') === '1');
 
 		const updateCnBtn = E('button', {
 			'type': 'button',
@@ -228,10 +163,8 @@ return view.extend({
 			})
 		}, _('Update list'));
 
-		const m = new form.JSONMap(data, 'MimoGate', 'minimal LuCI app for Mihomo');
-		m.readonly = !loadOk;
-
-		const s = m.section(form.NamedSection, 'settings', 'settings');
+		const m = new form.Map('mimogate', 'MimoGate', 'minimal LuCI app for Mihomo');
+		const s = m.section(form.NamedSection, 'config', 'mimogate');
 		s.tab('general', _('General'));
 		s.tab('access', _('Access control'));
 
@@ -242,6 +175,19 @@ return view.extend({
 
 		o = s.taboption('general', form.Value, 'ports', _('Routing ports'),
 			_('Specify ports to proxy, separated by commas.'));
+		o.rmempty = false;
+		o.validate = (section_id, value) => {
+			if (!section_id)
+				return true;
+			const parts = String(value || '').split(',').map(p => p.trim()).filter(Boolean);
+			if (!parts.length)
+				return _('Enter ports from 1 to 65535 separated by ASCII commas (,).');
+			for (const p of parts) {
+				if (!/^\d+$/.test(p) || +p < 1 || +p > 65535)
+					return _('Enter ports from 1 to 65535 separated by ASCII commas (,).');
+			}
+			return true;
+		};
 
 		o = s.taboption('general', form.Flag, 'panel_enabled', _('Enable panel'),
 			_('Dashboard assets are downloaded automatically on first use.'));
@@ -269,10 +215,12 @@ return view.extend({
 
 		o = s.taboption('general', form.Flag, 'ipv6_support', _('IPv6 support'),
 			_('Flexibly handle IPv6 traffic together with your configuration.'));
+		o.default = '1';
 		o.rmempty = false;
 
 		o = s.taboption('general', form.Flag, 'quic_reject', _('Reject QUIC'),
 			_('Rejects proxied QUIC (UDP 80/443) so applications fall back to TCP immediately. Direct traffic is unaffected.'));
+		o.default = '1';
 		o.rmempty = false;
 
 		o = s.taboption('general', form.DummyValue, '_update_cn', _('Mainland China IP'),
@@ -284,6 +232,7 @@ return view.extend({
 		o.value('all', _('All LAN devices'));
 		o.value('bypass', _('Bypass listed devices'));
 		o.value('proxy', _('Proxy listed devices only'));
+		o.default = 'all';
 		o.rmempty = false;
 
 		o = fwtool.addMACOption(s, 'access', 'acl_mac', _('MAC addresses'), null, hosts || {});
@@ -299,106 +248,6 @@ return view.extend({
 		o.datatype = 'or(ip6addr, cidr6)';
 		o.modalonly = false;
 		o.depends({ 'acl_mode': /^(bypass|proxy)$/, 'ipv6_support': '1' });
-
-		let busy = false;
-		const saveAll = async (apply) => {
-			if (m.readonly || busy)
-				return;
-
-			busy = true;
-			let applyTimer = null;
-			const stopApplyCountdown = () => {
-				if (applyTimer != null) {
-					window.clearTimeout(applyTimer);
-					applyTimer = null;
-				}
-			};
-			if (apply) {
-				const deadline = Date.now() + (L.env.apply_rollback || 90) * 1000;
-				let ts = Date.now();
-				const tick = () => {
-					const now = Date.now();
-					ui.changes.displayStatus('notice spinning',
-						E('p', _('Applying configuration changes… %ds')
-							.format(Math.max(Math.floor((deadline - Date.now()) / 1000), 0))));
-					if (now >= deadline)
-						return;
-					applyTimer = window.setTimeout(tick, Math.max(1000 - (now - ts), 0));
-					ts = now;
-				};
-				tick();
-			}
-			try {
-				await m.save();
-				const d = data.settings;
-
-				const portRes = await applyPorts(d.ports || '');
-				if (!portRes?.ok)
-					throw new Error(rpcError(portRes, _('Unable to apply port bypass.')));
-				d.ports = portRes.ports;
-
-				const setRes = await saveSettings(
-					d.panel_enabled === '1',
-					d.panel_port || '9090',
-					d.panel_secret || '',
-					d.quic_reject === '1',
-					d.ipv6_support === '1'
-				);
-				if (!setRes?.ok)
-					throw new Error(rpcError(setRes, _('Unable to save settings.')));
-				d.panel_enabled = setRes.panel_enabled ? '1' : '0';
-				d.panel_port = setRes.panel_port;
-				d.panel_secret = setRes.panel_secret;
-				d.quic_reject = setRes.quic_reject ? '1' : '0';
-				d.ipv6_support = setRes.ipv6_support ? '1' : '0';
-				renderPanelBar(!!setRes.panel_enabled);
-
-				const entriesStr = [
-					...L.toArray(d.acl_mac),
-					...L.toArray(d.acl_ipv4),
-					...L.toArray(d.acl_ipv6)
-				].join(', ');
-				const aclRes = await saveAcl(d.acl_mode || 'all', entriesStr);
-				if (!aclRes?.ok)
-					throw new Error(rpcError(aclRes, _('Unable to save access control settings.')));
-				d.acl_mode = aclRes.mode;
-				const savedEntries = aclRes.entries.split(/[\s,]+/).filter(Boolean);
-				d.acl_mac = savedEntries.filter(x => MAC_RE.test(x));
-				d.acl_ipv4 = savedEntries.filter(x => !MAC_RE.test(x) && !x.includes(':'));
-				d.acl_ipv6 = savedEntries.filter(x => !MAC_RE.test(x) && x.includes(':'));
-
-				const wantEnabled = d.enabled === '1';
-				await runInit(wantEnabled ? 'enable' : 'disable');
-				await m.reset();
-
-				if (!apply) {
-					ui.addNotification(null, E('p', _('Saved. Restart MimoGate to apply changes.')), 'info');
-					return;
-				}
-
-				await runInit(wantEnabled ? 'restart' : 'stop');
-				await new Promise((resolve) => window.setTimeout(resolve, wantEnabled ? 1200 : 600));
-				await syncStatus();
-				stopApplyCountdown();
-				ui.changes.displayStatus('notice',
-					E('p', _('Configuration changes applied.')));
-				await new Promise((resolve) => window.setTimeout(resolve, (L.env.apply_display || 1.5) * 1000));
-			}
-			catch (e) {
-				ui.addNotification(null, E('p', e.message), 'danger');
-			}
-			finally {
-				if (apply) {
-					stopApplyCountdown();
-					ui.changes.displayStatus(false);
-				}
-				busy = false;
-			}
-		};
-
-		this.handleSave = () => saveAll(false);
-		this.handleSaveApply = () => saveAll(true);
-		this.handleReset = () => m.reset();
 
 		poll.add(() => syncStatus(), POLL_INTERVAL);
 
