@@ -138,7 +138,7 @@ load_settings() {
 	config_load mimogate
 	config_get_bool panel_enabled config panel_enabled 0
 	config_get panel_port config panel_port 9090
-	config_get panel_secret config panel_secret '666V888c'
+	config_get panel_secret config panel_secret ''
 	config_get_bool quic_reject config quic_reject 1
 	config_get_bool ipv6_support config ipv6_support 1
 	case "$panel_port" in
@@ -675,7 +675,7 @@ start_dnsmasq() {
 
 stop_service() {
 	case "${action:-}" in
-		stop|restart|shutdown)
+		stop|restart|reload|shutdown)
 			rm -f "$BOOT_WAN_PENDING"
 			stop_routing
 			;;
@@ -714,12 +714,11 @@ reload_service() {
 	config_load mimogate
 	config_get_bool enabled config enabled 0
 	if [ "$enabled" = 1 ]; then
-		/etc/init.d/mimogate enabled || /etc/init.d/mimogate enable
+		restart && { /etc/init.d/mimogate enabled || /etc/init.d/mimogate enable; }
 	else
 		/etc/init.d/mimogate enabled && /etc/init.d/mimogate disable
+		stop
 	fi
-	stop
-	start
 }
 
 service_triggers() {
