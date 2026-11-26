@@ -586,14 +586,15 @@ restart() {
 }
 
 mihomo_dns_ready() {
-	local pid attempt
+	local pid attempt hex
+	hex="$(printf '%04X' "$DNS_PORT")"
 	log_dnsmasq "Waiting for Mihomo DNS (PID $$)."
 	for attempt in 1 2 3 4; do
 		pid="$(main_pid)"
 		if [ -n "$pid" ] && [ "$(cat "$ROUTING_READY" 2>/dev/null)" = "$pid" ] &&
-			netstat -lnup 2>/dev/null | awk -v pid="$pid" -v port="$DNS_PORT" '
-			($4 == "127.0.0.1:" port || $4 == "0.0.0.0:" port ||
-			 $4 == ":::" port || $4 == "[::]:" port) && index($NF, pid "/") == 1 { found = 1 }
+			cat /proc/net/udp /proc/net/udp6 2>/dev/null | awk -v hex=":$hex" '
+			$4 == "07" && ($2 == "0100007F" hex || $2 == "7F000001" hex ||
+			 $2 == "00000000" hex || $2 == "00000000000000000000000000000000" hex) { found = 1 }
 			END { exit !found }'; then
 			log_dnsmasq "Mihomo DNS listener ready on attempt $attempt (Mihomo PID $pid)."
 			return 0
@@ -626,11 +627,10 @@ service_started() {
 }
 
 start_dnsmasq() {
-	local section config dir dropin previous conflict temporary error
+	local section config dir dropin conflict
 	section="$(uci -q show 'dhcp.@dnsmasq[0]' | sed -n '1s/^dhcp\.\([^=]*\)=dnsmasq$/\1/p')"
 	config="/tmp/etc/dnsmasq.conf.$section"
 	dir="$(sed -n 's/^conf-dir=//p' "$config" 2>/dev/null | head -n 1)"
-	# Use only an unfiltered directory that disappears at reboot.
 	case "$dir" in
 		/*,*) dir= ;;
 		/*) dir="$(readlink -f "$dir" 2>/dev/null)" ;;
@@ -639,39 +639,20 @@ start_dnsmasq() {
 	case "$dir" in /tmp/*) ;; *) dir= ;; esac
 	dropin="$dir/mimogate.conf"
 
-	previous="$(cat "$DNSMASQ_STATE" 2>/dev/null)"
-	if [ -n "$previous" ] && [ "$previous" != "$dropin" ]; then
-		restore_dnsmasq || return 0
-	fi
 	if [ ! -x "$DNSMASQ_INIT" ] || [ ! -d "$dir" ]; then
-		error='Skipping DNS forwarding: no supported dnsmasq configuration directory.'
+		log_dnsmasq 'Skipping DNS forwarding: no supported dnsmasq configuration directory.'
 	elif conflict="$(dnsmasq_upstream_conflict "$config" "$dir" "$dropin")" && [ -n "$conflict" ]; then
-		error="Skipping DNS forwarding: existing upstream in $conflict."
+		log_dnsmasq "Skipping DNS forwarding: existing upstream in $conflict."
 	elif ! mihomo_dns_ready; then
-		error="Skipping DNS forwarding: Mihomo has no local DNS listener on port $DNS_PORT."
-	elif temporary="$(mktemp "$dir/.mimogate.XXXXXX")" &&
-		printf '%s\n' no-resolv "server=127.0.0.1#$DNS_PORT" > "$temporary" &&
-		chmod 644 "$temporary" &&
+		log_dnsmasq "Skipping DNS forwarding: Mihomo has no local DNS listener on port $DNS_PORT."
+	elif printf '%s\n' no-resolv "server=127.0.0.1#$DNS_PORT" > "$dropin" &&
 		printf '%s\n' "$dropin" > "$DNSMASQ_STATE" &&
-		mv -f "$temporary" "$dropin"; then
-		log_dnsmasq "Validating and restarting dnsmasq (PID $$)."
-		if /usr/sbin/dnsmasq --test -C "$config" && "$DNSMASQ_INIT" restart; then
-			local dns_attempt
-			for dns_attempt in 1 2 3 4 5; do
-				if procd_running dnsmasq "$section"; then
-					log_dnsmasq "dnsmasq forwarding enabled on 127.0.0.1:$DNS_PORT."
-					return 0
-				fi
-				[ "$dns_attempt" = 5 ] || sleep 1
-			done
-		fi
-		error='Could not enable dnsmasq forwarding. Restoring the original upstream.'
+		"$DNSMASQ_INIT" restart; then
+		log_dnsmasq "dnsmasq forwarding enabled on 127.0.0.1:$DNS_PORT."
 	else
-		[ -z "$temporary" ] || rm -f "$temporary"
-		error='Could not write the dnsmasq forwarding fragment.'
+		log_dnsmasq 'Could not enable dnsmasq forwarding. Restoring the original upstream.'
+		restore_dnsmasq
 	fi
-	log_dnsmasq "$error"
-	restore_dnsmasq
 	return 0
 }
 
