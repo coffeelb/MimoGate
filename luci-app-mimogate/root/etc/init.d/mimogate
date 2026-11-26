@@ -26,6 +26,8 @@ case "${action:-}" in
 		;;
 esac
 
+type config_load >/dev/null 2>&1 || . /lib/functions.sh
+
 START=99
 STOP=10
 USE_PROCD=1

@@ -224,6 +224,10 @@ return view.extend({
 			}
 			return true;
 		};
+		o.write = (section_id, value) => {
+			const ports = [ ...new Set(String(value || '').split(',').map(p => String(+p.trim()))) ];
+			uci.set('mimogate', section_id, 'ports', ports.join(', '));
+		};
 
 		o = s.taboption('general', form.Flag, 'panel_enabled', _('Enable panel'),
 			_('Dashboard assets are downloaded automatically on first use.'));
