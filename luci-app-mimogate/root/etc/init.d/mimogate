@@ -416,6 +416,18 @@ install_routing() (
 		lan_devs="${lan_devs:+$lan_devs, }\"$dev\""
 	done
 	[ -n "$lan_devs" ] || return 1
+	local unselected_devs= iface st acl_dns4= acl_dns6=
+	if [ -n "$fakeip4" ]; then
+		for iface in $(ubus call network.interface dump 2>/dev/null | jsonfilter -e '@.interface[*].interface'); do
+			case "$iface" in loopback|wan*|WAN*) continue ;; esac
+			st="$(ubus call "network.interface.$iface" status 2>/dev/null)" || continue
+			printf '%s' "$st" | jsonfilter -e '@.route[@.mask=0].mask' >/dev/null 2>&1 && continue
+			dev="$(printf '%s' "$st" | jsonfilter -e '@.l3_device')"
+			case "$dev" in ''|*[!a-zA-Z0-9_.:@-]*|lo|"$TUN_DEVICE") continue ;; esac
+			case ", $lan_devs, $unselected_devs, " in *", \"$dev\", "*) continue ;; esac
+			unselected_devs="${unselected_devs:+$unselected_devs, }\"$dev\""
+		done
+	fi
 	ip link show dev "$TUN_DEVICE" >/dev/null || return 1
 	if [ "$ipv6_support" != 1 ]; then
 		ipv6_reject='meta nfproto ipv6 reject'
@@ -501,41 +513,53 @@ install_routing() (
 				}
 		EOF
 		if [ "$acl_mode" = proxy ] || { [ "$acl_mode" = bypass ] && case "$acl_sets" in *'set acl_mac '*|*'set acl_ip4 '*) true ;; *) false ;; esac; }; then
+			acl_dns4=1
+		fi
+		if [ "$acl_mode" = proxy ] || { [ "$acl_mode" = bypass ] && case "$acl_sets" in *'set acl_mac '*|*'set acl_ip6 '*) true ;; *) false ;; esac; }; then
+			acl_dns6=1
+		fi
+		if [ -n "$acl_dns4" ] || [ -n "$unselected_devs" ]; then
 			cat <<-EOF
 				chain dns_bypass {
 					type nat hook prerouting priority dstnat - 5; policy accept;
-					iifname != { $lan_devs } return
 					meta nfproto != ipv4 return
 					fib daddr type != local return
 					meta l4proto != { tcp, udp } return
 					th dport != 53 return
 			EOF
-			if [ "$acl_mode" = bypass ]; then
-				case "$acl_sets" in *'set acl_mac '*) printf '\t\tether saddr @acl_mac dnat ip to %s\n' "$direct_dns" ;; esac
-				case "$acl_sets" in *'set acl_ip4 '*) printf '\t\tip saddr @acl_ip4 dnat ip to %s\n' "$direct_dns" ;; esac
-			else
-				case "$acl_sets" in *'set acl_mac '*) printf '\t\tether saddr @acl_mac return\n' ;; esac
-				case "$acl_sets" in *'set acl_ip4 '*) printf '\t\tip saddr @acl_ip4 return\n' ;; esac
-				printf '\t\tdnat ip to %s\n' "$direct_dns"
+			[ -z "$unselected_devs" ] || printf '\t\tiifname { %s } dnat ip to %s\n' "$unselected_devs" "$direct_dns"
+			if [ -n "$acl_dns4" ]; then
+				printf '\t\tiifname != { %s } return\n' "$lan_devs"
+				if [ "$acl_mode" = bypass ]; then
+					case "$acl_sets" in *'set acl_mac '*) printf '\t\tether saddr @acl_mac dnat ip to %s\n' "$direct_dns" ;; esac
+					case "$acl_sets" in *'set acl_ip4 '*) printf '\t\tip saddr @acl_ip4 dnat ip to %s\n' "$direct_dns" ;; esac
+				else
+					case "$acl_sets" in *'set acl_mac '*) printf '\t\tether saddr @acl_mac return\n' ;; esac
+					case "$acl_sets" in *'set acl_ip4 '*) printf '\t\tip saddr @acl_ip4 return\n' ;; esac
+					printf '\t\tdnat ip to %s\n' "$direct_dns"
+				fi
 			fi
 			printf '\t}\n'
 		fi
-		if [ "$acl_mode" = proxy ] || { [ "$acl_mode" = bypass ] && case "$acl_sets" in *'set acl_mac '*|*'set acl_ip6 '*) true ;; *) false ;; esac; }; then
+		if [ -n "$acl_dns6" ] || [ -n "$unselected_devs" ]; then
 			cat <<-EOF
 				chain dns_bypass6 {
 					type filter hook input priority filter - 5; policy accept;
-					iifname != { $lan_devs } return
 					meta nfproto != ipv6 return
 					meta l4proto != { tcp, udp } return
 					th dport != 53 return
 			EOF
-			if [ "$acl_mode" = bypass ]; then
-				case "$acl_sets" in *'set acl_mac '*) printf '\t\tether saddr @acl_mac reject\n' ;; esac
-				case "$acl_sets" in *'set acl_ip6 '*) printf '\t\tip6 saddr @acl_ip6 reject\n' ;; esac
-			else
-				case "$acl_sets" in *'set acl_mac '*) printf '\t\tether saddr @acl_mac return\n' ;; esac
-				case "$acl_sets" in *'set acl_ip6 '*) printf '\t\tip6 saddr @acl_ip6 return\n' ;; esac
-				printf '\t\treject\n'
+			[ -z "$unselected_devs" ] || printf '\t\tiifname { %s } reject\n' "$unselected_devs"
+			if [ -n "$acl_dns6" ]; then
+				printf '\t\tiifname != { %s } return\n' "$lan_devs"
+				if [ "$acl_mode" = bypass ]; then
+					case "$acl_sets" in *'set acl_mac '*) printf '\t\tether saddr @acl_mac reject\n' ;; esac
+					case "$acl_sets" in *'set acl_ip6 '*) printf '\t\tip6 saddr @acl_ip6 reject\n' ;; esac
+				else
+					case "$acl_sets" in *'set acl_mac '*) printf '\t\tether saddr @acl_mac return\n' ;; esac
+					case "$acl_sets" in *'set acl_ip6 '*) printf '\t\tip6 saddr @acl_ip6 return\n' ;; esac
+					printf '\t\treject\n'
+				fi
 			fi
 			printf '\t}\n'
 		fi
