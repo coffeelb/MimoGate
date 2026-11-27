@@ -1,6 +1,10 @@
 mode: rule
 log-level: error
 ipv6: true
+tcp-concurrent: true
+
+profile:
+  store-selected: true
 
 proxies:
   - name: main-out
@@ -15,6 +19,9 @@ proxies:
 
 tun:
   enable: true
+  stack: mips
+  gso: true
+  gso-max-size: 65536
   auto-route: true
   auto-redirect: true
   auto-detect-interface: true
@@ -41,7 +48,7 @@ dns:
     - 223.5.5.5
     - 119.29.29.29
   nameserver:
-    - "https://1.1.1.1/dns-query#main-out"
+    - "1.1.1.1#main-out"
   direct-nameserver:
     - "https://dns.alidns.com/dns-query#DIRECT"
   nameserver-policy:
@@ -80,5 +87,5 @@ rule-providers:
 rules:
   - DOMAIN-SUFFIX,browserleaks.com,main-out
   - RULE-SET,cn_domain,DIRECT
-  - RULE-SET,cn_ip,DIRECT
+  - RULE-SET,cn_ip,DIRECT,no-resolve
   - MATCH,main-out
