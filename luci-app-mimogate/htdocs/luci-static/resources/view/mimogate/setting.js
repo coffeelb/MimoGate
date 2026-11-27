@@ -16,6 +16,7 @@ const POLL_INTERVAL = 5;
 const getStatus = rpc.declare({ object: 'mimogate', method: 'status', reject: true });
 const getVersion = rpc.declare({ object: 'mimogate', method: 'version', reject: true });
 const getHostHints = rpc.declare({ object: 'luci-rpc', method: 'getHostHints', expect: { '': {} } });
+const getNetworkDevices = rpc.declare({ object: 'luci-rpc', method: 'getNetworkDevices', expect: { '': {} } });
 const updateCn = rpc.declare({ object: 'mimogate', method: 'update_cn', reject: true });
 const serviceAction = rpc.declare({
 	object: 'mimogate', method: 'service_action', params: [ 'action' ], reject: true
@@ -86,6 +87,22 @@ function rpcError(res, fallback) {
 	return [ res?.message ? _(res.message) : fallback, res?.detail ].filter(Boolean).join('\n');
 }
 
+function filterRouterHosts(hosts, devices) {
+	const local = new Set();
+	for (const d of Object.values(devices || {})) {
+		if (d?.mac) local.add(d.mac.toUpperCase());
+		for (const a of [ ...(d?.ipaddrs || []), ...(d?.ip6addrs || []) ])
+			if (a?.address) local.add(a.address.toLowerCase());
+	}
+	return Object.fromEntries(Object.entries(hosts || {}).flatMap(([ mac, info ]) => {
+		if (local.has(mac.toUpperCase())) return [];
+		const ipaddrs = (info?.ipaddrs || []).filter(ip => !local.has(ip.toLowerCase()));
+		const ip6addrs = (info?.ip6addrs || []).filter(ip => !local.has(ip.toLowerCase()));
+		if ((info?.ipaddrs?.length || info?.ip6addrs?.length) && !ipaddrs.length && !ip6addrs.length) return [];
+		return [[ mac, Object.assign({}, info, { ipaddrs, ip6addrs }) ]];
+	}));
+}
+
 return view.extend({
 	handleSaveApply(ev, mode) {
 		return this.handleSave(ev).then(() => {
@@ -124,11 +141,13 @@ return view.extend({
 			L.resolveDefault(getStatus(), null),
 			L.resolveDefault(getVersion(), null),
 			uci.load('mimogate'),
-			L.resolveDefault(getHostHints(), {})
+			L.resolveDefault(getHostHints(), {}),
+			L.resolveDefault(getNetworkDevices(), {})
 		]);
 	},
 
-	render([ statusRes, verRes, , hosts ]) {
+	render([ statusRes, verRes, , rawHosts, devices ]) {
+		const hosts = filterRouterHosts(rawHosts, devices);
 		const barStateEl = E('div', { 'class': 'v' }, '—');
 		const barPanelEl = E('div', { 'class': 'v' }, '—');
 		const barCnEl = E('div', { 'class': 'v' }, '—');
