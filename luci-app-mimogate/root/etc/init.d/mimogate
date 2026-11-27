@@ -372,7 +372,7 @@ start_routing() {
 }
 
 install_routing() (
-	local ports lan family families=-4 ipv6_bypass= ipv6_reject= cn_file= cn_source= acl_mode=all acl_entries= acl_sets= macs= ip4s= ip6s=
+	local ports lan_devs= listen_ifaces= dev family families=-4 ipv6_bypass= ipv6_reject= cn_file= cn_source= acl_mode=all acl_entries= acl_sets= macs= ip4s= ip6s=
 	log_ports "Waiting for routing lock (PID $$)."
 	routing_lock || return 1
 	log_ports "Routing lock acquired (PID $$)."
@@ -380,6 +380,7 @@ install_routing() (
 	config_get ports config ports ''
 	[ -n "$ports" ] || ports="$(cat "$DEFAULT_PORTS_CONFIG")"
 	ports="$(normalize_ports "$ports")" || return 1
+	config_get listen_ifaces config listen_interfaces ''
 	config_get acl_mode config acl_mode 'all'
 	case "$acl_mode" in
 		all|bypass|proxy) ;;
@@ -403,10 +404,14 @@ install_routing() (
 		fakeip6="${fakeip_ranges#* }"
 		ip6_local_guard="ip6 daddr != $fakeip6 "
 	fi
-	lan="$(ubus call network.interface.lan status | jsonfilter -e '@.l3_device')"
-	case "$lan" in
-		''|*[!a-zA-Z0-9_.:@-]*) return 1 ;;
-	esac
+	[ -n "$listen_ifaces" ] || listen_ifaces="$(ubus call network.interface.lan status | jsonfilter -e '@.l3_device')"
+	for dev in $listen_ifaces; do
+		case "$dev" in
+			''|*[!a-zA-Z0-9_.:@-]*|lo|"$TUN_DEVICE") continue ;;
+		esac
+		lan_devs="${lan_devs:+$lan_devs, }\"$dev\""
+	done
+	[ -n "$lan_devs" ] || return 1
 	ip link show dev "$TUN_DEVICE" >/dev/null || return 1
 	if [ "$ipv6_support" != 1 ]; then
 		ipv6_reject='meta nfproto ipv6 reject'
@@ -470,7 +475,7 @@ install_routing() (
 				chain prerouting {
 					type filter hook prerouting priority -90; policy accept;
 					ct status dnat return
-					iifname != "$lan" return
+					iifname != { $lan_devs } return
 		EOF
 		case "$acl_mode" in
 			bypass)
@@ -495,7 +500,7 @@ install_routing() (
 			cat <<-EOF
 				chain dns_bypass {
 					type nat hook prerouting priority dstnat - 5; policy accept;
-					iifname != "$lan" return
+					iifname != { $lan_devs } return
 					meta nfproto != ipv4 return
 					fib daddr type != local return
 					meta l4proto != { tcp, udp } return
@@ -515,7 +520,7 @@ install_routing() (
 			cat <<-EOF
 				chain dns_bypass6 {
 					type filter hook input priority filter - 5; policy accept;
-					iifname != "$lan" return
+					iifname != { $lan_devs } return
 					meta nfproto != ipv6 return
 					meta l4proto != { tcp, udp } return
 					th dport != 53 return

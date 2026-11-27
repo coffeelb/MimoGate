@@ -4,7 +4,8 @@
     "read": {
       "ubus": {
         "mimogate": [ "status", "version", "read_config", "connection_check" ],
-        "luci-rpc": [ "getHostHints", "getNetworkDevices" ]
+        "luci-rpc": [ "getHostHints", "getNetworkDevices" ],
+        "network.interface": [ "dump" ]
       },
       "uci": [ "mimogate" ]
     },

@@ -17,6 +17,7 @@ const getStatus = rpc.declare({ object: 'mimogate', method: 'status', reject: tr
 const getVersion = rpc.declare({ object: 'mimogate', method: 'version', reject: true });
 const getHostHints = rpc.declare({ object: 'luci-rpc', method: 'getHostHints', expect: { '': {} } });
 const getNetworkDevices = rpc.declare({ object: 'luci-rpc', method: 'getNetworkDevices', expect: { '': {} } });
+const dumpInterfaces = rpc.declare({ object: 'network.interface', method: 'dump', expect: { interface: [] } });
 const updateCn = rpc.declare({ object: 'mimogate', method: 'update_cn', reject: true });
 const serviceAction = rpc.declare({
 	object: 'mimogate', method: 'service_action', params: [ 'action' ], reject: true
@@ -142,11 +143,12 @@ return view.extend({
 			L.resolveDefault(getVersion(), null),
 			uci.load('mimogate'),
 			L.resolveDefault(getHostHints(), {}),
-			L.resolveDefault(getNetworkDevices(), {})
+			L.resolveDefault(getNetworkDevices(), {}),
+			L.resolveDefault(dumpInterfaces(), [])
 		]);
 	},
 
-	render([ statusRes, verRes, , rawHosts, devices ]) {
+	render([ statusRes, verRes, , rawHosts, devices, ifaces ]) {
 		const hosts = filterRouterHosts(rawHosts, devices);
 		const barStateEl = E('div', { 'class': 'v' }, '—');
 		const barPanelEl = E('div', { 'class': 'v' }, '—');
@@ -287,6 +289,21 @@ return view.extend({
 		o = s.taboption('general', form.DummyValue, '_update_cn', _('Mainland China IP'),
 			_('Updates are saved to cache and take effect the next time MimoGate starts.'));
 		o.cfgvalue = () => E('div', { 'style': 'display:flex; align-items:center; gap:.75em; flex-wrap:wrap' }, [ updateCnBtn, cnStateEl ]);
+
+		o = s.taboption('access', form.MultiValue, 'listen_interfaces', _('Listen interfaces'),
+			_('Select LAN/VLAN interfaces to proxy. Leave empty to use the default lan interface.'));
+		const seenDevs = new Set();
+		for (const iface of ifaces || []) {
+			const dev = iface?.l3_device || iface?.device;
+			const name = iface?.interface || '';
+			if (!dev || seenDevs.has(dev) || dev === 'lo' || dev === 'mimogate0' ||
+			    name === 'loopback' || /^wan/i.test(name) ||
+			    (iface?.route || []).some(r => r?.mask === 0))
+				continue;
+			seenDevs.add(dev);
+			o.value(dev, name ? '%s (%s)'.format(dev, name) : dev);
+		}
+		o.placeholder = _('Default (lan)');
 
 		o = s.taboption('access', form.ListValue, 'acl_mode', _('Access control mode'),
 			_('Control which LAN devices use Mihomo by MAC, IPv4, IPv6, or CIDR. Changes take effect the next time MimoGate starts.'));

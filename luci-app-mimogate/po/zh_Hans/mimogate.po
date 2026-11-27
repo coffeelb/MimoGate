@@ -205,6 +205,15 @@ msgstr "常规设置"
 msgid "Running status"
 msgstr "运行状态"
 
+msgid "Listen interfaces"
+msgstr "监听接口"
+
+msgid "Select LAN/VLAN interfaces to proxy. Leave empty to use the default lan interface."
+msgstr "选择需要代理的 LAN/VLAN 接口。留空默认仅代理 lan 接口。"
+
+msgid "Default (lan)"
+msgstr "默认 (lan)"
+
 msgid "Access control mode"
 msgstr "访问控制模式"
 
