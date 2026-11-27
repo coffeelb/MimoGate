@@ -184,8 +184,8 @@ detect_fakeip() {
 			if (off || mode != "fake-ip") exit 0
 			r4 = mask_v4(raw4 != "" ? raw4 : "198.18.0.1/16")
 			if (r4 == "") r4 = "198.18.0.0/16"
-			r6 = (raw6 ~ /^[0-9a-fA-F:]+\/[0-9]+$/ && index(raw6, ":") > 0 && split(raw6, b, "/") == 2 && b[2]+0 >= 1 && b[2]+0 <= 128) ? raw6 : "fc00::/18"
-			print r4, r6
+			r6 = (raw6 ~ /^[0-9a-fA-F:]+\/[0-9]+$/ && index(raw6, ":") > 0 && split(raw6, b, "/") == 2 && b[2]+0 >= 1 && b[2]+0 <= 128) ? raw6 : ""
+			print (r6 != "" ? r4 " " r6 : r4)
 		}
 	' "$1"
 }
@@ -396,13 +396,17 @@ install_routing() (
 		fi
 	fi
 	local panel_enabled panel_port panel_secret quic_reject ipv6_support direct_dns quic_rule=
-	local fakeip_ranges fakeip4= fakeip6= ip6_local_guard=
+	local fakeip_ranges fakeip4= fakeip6= ip4_local_guard= ip6_local_guard=
 	load_settings
 	fakeip_ranges="$(detect_fakeip "$CONFIG")"
 	if [ -n "$fakeip_ranges" ]; then
 		fakeip4="${fakeip_ranges%% *}"
-		fakeip6="${fakeip_ranges#* }"
-		ip6_local_guard="ip6 daddr != $fakeip6 "
+		ip4_local_guard="ip daddr != $fakeip4 "
+		case "$fakeip_ranges" in *' '*)
+			fakeip6="${fakeip_ranges#* }"
+			ip6_local_guard="ip6 daddr != $fakeip6 "
+			;;
+		esac
 	fi
 	[ -n "$listen_ifaces" ] || listen_ifaces="$(ubus call network.interface.lan status | jsonfilter -e '@.l3_device')"
 	for dev in $listen_ifaces; do
@@ -450,7 +454,7 @@ install_routing() (
 					$ipv6_bypass
 					ct direction reply return
 					fib daddr type { local, broadcast, multicast, anycast } return
-					ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/4, 240.0.0.0/4 } return
+					${ip4_local_guard}ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/4, 240.0.0.0/4 } return
 					${ip6_local_guard}ip6 daddr { ::/128, ::1, fc00::/7, fe80::/10, ff00::/8 } return
 					ip daddr @cn4 counter return
 					ip6 daddr @cn6 counter return
@@ -464,9 +468,9 @@ install_routing() (
 			cat <<-EOF
 					meta l4proto != { tcp, udp } return
 					ip daddr $fakeip4 goto bypass
-					ip6 daddr $fakeip6 goto bypass
-					th dport @ports goto bypass
 			EOF
+			[ -z "$fakeip6" ] || printf '\t\tip6 daddr %s goto bypass\n' "$fakeip6"
+			printf '\t\tth dport @ports goto bypass\n'
 		else
 			printf '\t\tmeta l4proto { tcp, udp } th dport @ports goto bypass\n'
 		fi
@@ -549,7 +553,7 @@ install_routing() (
 	[ -z "${1:-}" ] || printf '%s\n' "$1" > "$ROUTING_READY" || return 1
 	trap - EXIT
 	log_ports "Loaded LAN interception ports: $ports."
-	[ -z "$fakeip4" ] || log_ports "Detected fake-ip mode; bypassing port filter for $fakeip4 and $fakeip6."
+	[ -z "$fakeip4" ] || log_ports "Detected fake-ip mode; bypassing port filter for $fakeip4${fakeip6:+ and $fakeip6}."
 	[ "$acl_mode" = all ] || log_ports "Loaded LAN access control (mode: $acl_mode)."
 	case "$cn_source" in
 		cached) log_ports 'Loaded cached mainland China address sets.' ;;
