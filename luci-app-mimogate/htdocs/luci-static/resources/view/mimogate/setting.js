@@ -306,7 +306,7 @@ return view.extend({
 		o.placeholder = _('Default (lan)');
 
 		o = s.taboption('access', form.ListValue, 'acl_mode', _('Access control mode'),
-			_('Control which LAN devices use Mihomo by MAC, IPv4, IPv6, or CIDR. Changes take effect the next time MimoGate starts.'));
+			_('Control which LAN devices use Mihomo by MAC, IPv4, IPv6, or CIDR.'));
 		o.value('all', _('All LAN devices'));
 		o.value('bypass', _('Bypass listed devices'));
 		o.value('proxy', _('Proxy listed devices only'));

@@ -61,17 +61,8 @@ msgstr "请求失败。"
 msgid "The configuration exceeds the web editor size limit."
 msgstr "配置超出网页传输上限。"
 
-msgid "Intercepted ports"
-msgstr "接管端口"
-
 msgid "Specify ports to proxy, separated by commas."
 msgstr "指定代理的端口，用逗号隔开。"
-
-msgid "Unable to apply port bypass."
-msgstr "无法应用防火墙端口绕过。"
-
-msgid "Unable to read the port list."
-msgstr "无法读取接管端口。"
 
 msgid "Mainland China IP"
 msgstr "中国大陆 IP"
@@ -106,9 +97,6 @@ msgstr "无法读取 procd 服务状态。"
 msgid "Could not read Mihomo version."
 msgstr "无法读取 Mihomo 版本。"
 
-msgid "Could not read boot status."
-msgstr "无法读取开机自启状态。"
-
 msgid "Could not read the configuration file."
 msgstr "无法读取配置文件。"
 
@@ -136,15 +124,6 @@ msgstr "无法写入临时配置文件。"
 msgid "Could not save the configuration file."
 msgstr "无法保存配置文件。"
 
-msgid "Could not read the saved interception ports."
-msgstr "无法读取已保存的接管端口。"
-
-msgid "Interception port input is invalid or too long."
-msgstr "接管端口输入无效或过长。"
-
-msgid "Could not apply firewall port rules."
-msgstr "无法应用防火墙端口规则。"
-
 msgid "Could not update the mainland China IP list."
 msgstr "无法更新中国大陆 IP 列表。"
 
@@ -166,29 +145,8 @@ msgstr "列表内设备直连"
 msgid "Proxy listed devices only"
 msgstr "仅列表内设备走代理"
 
-msgid "-- Add online device (MAC / IP) --"
-msgstr "-- 从在线设备添加（MAC / IP）--"
-
-msgid "Control which LAN devices use Mihomo by MAC, IPv4, IPv6, or CIDR. Changes take effect the next time MimoGate starts."
-msgstr "按 MAC、IPv4、IPv6 或 CIDR 控制局域网设备是否走 Mihomo（推荐优先选 MAC 可同时覆盖 IPv4/IPv6）。保存后下次启动 MimoGate 时生效。"
-
-msgid "Unable to read access control settings."
-msgstr "无法读取访问控制设置。"
-
-msgid "Unable to save access control settings."
-msgstr "无法保存访问控制设置。"
-
-msgid "Could not read access control settings."
-msgstr "无法读取访问控制设置。"
-
-msgid "Invalid access control mode."
-msgstr "无效的访问控制模式。"
-
-msgid "Access control list is invalid or too long."
-msgstr "访问控制列表无效或过长。"
-
-msgid "Could not save access control settings."
-msgstr "无法保存访问控制设置。"
+msgid "Control which LAN devices use Mihomo by MAC, IPv4, IPv6, or CIDR."
+msgstr "按 MAC、IPv4、IPv6 或 CIDR 控制局域网设备是否走 Mihomo（推荐优先选 MAC 可同时覆盖 IPv4/IPv6）。"
 
 msgid "Settings"
 msgstr "设置"
@@ -229,15 +187,6 @@ msgstr "IPv4 地址"
 msgid "IPv6 addresses"
 msgstr "IPv6 地址"
 
-msgid "-- Add MAC --"
-msgstr "-- 添加 MAC --"
-
-msgid "-- Add IPv4 --"
-msgstr "-- 添加 IPv4 --"
-
-msgid "-- Add IPv6 --"
-msgstr "-- 添加 IPv6 --"
-
 msgid "Connection check"
 msgstr "连通性测试"
 
@@ -277,9 +226,6 @@ msgstr "代理开关"
 
 msgid "Enable MimoGate and start on boot."
 msgstr "启用 MimoGate 并随开机自启。"
-
-msgid "Save & Apply"
-msgstr "保存并应用"
 
 msgid "Reset"
 msgstr "复位"
@@ -323,26 +269,8 @@ msgstr "拒绝走代理的 QUIC（UDP 80/443）流量，使应用立即回退到
 msgid "IPv6 support"
 msgstr "IPv6 支持"
 
-msgid "Could not read settings."
-msgstr "无法读取设置。"
-
-msgid "Unable to save settings."
-msgstr "无法保存设置。"
-
-msgid "Could not save settings."
-msgstr "无法保存设置。"
-
-msgid "Panel port must be between 1 and 65535."
-msgstr "面板端口必须在 1 到 65535 之间。"
-
-msgid "Panel secret is invalid or too long."
-msgstr "面板密钥无效或过长。"
-
 msgid "Routing ports"
 msgstr "路由端口"
-
-msgid "Reveal/hide password"
-msgstr "显示/隐藏密码"
 
 msgid "Flexibly handle IPv6 traffic together with your configuration."
 msgstr "配合配置文件灵活接管 IPv6 流量。"

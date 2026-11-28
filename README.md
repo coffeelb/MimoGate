@@ -21,8 +21,9 @@ Instead of bloated form-based node and rule generators, it focuses on **service 
   - **Smart Local & Forwarded Traffic Bypass**: Automatically bypasses private/reserved addresses and inbound port forwards (DNAT). Supports intercepting router-originated traffic while exempting DHCPv4/DHCPv6 and allowing bypass via packet mark `0x20000000` (e.g., for router-based VPN clients like WireGuard).
 
 - **LAN Access Control (ACL) & Direct DNS Bypass**
+  - Supports selecting specific LAN/VLAN **Listen interfaces** (defaults to `lan` when left empty), and in `fake-ip` mode automatically bypasses router DNS for unselected downstream VLANs so they receive real IPs.
   - Supports three modes: **All LAN devices**, **Bypass listed devices**, and **Proxy listed devices only**.
-  - Matches devices by **MAC, IPv4, IPv6, or CIDR**, with a built-in online device picker (selecting MAC addresses is recommended to cover both IPv4 and IPv6).
+  - Matches devices by **MAC, IPv4, IPv6, or CIDR**, with a built-in online device picker that filters out router local addresses (selecting MAC addresses is recommended to cover both IPv4 and IPv6).
   - For bypassed LAN devices, automatically DNATs their router-bound IPv4 DNS queries (port 53) to a direct DNS server (`223.5.5.5` by default; customizable via UCI `mimogate.config.direct_dns`) and rejects router-bound IPv6 DNS queries so dual-stack clients immediately fall back to direct IPv4 DNS without hitting Mihomo DNS (note: local `.lan` hostnames are not resolved by `dnsmasq` for bypassed devices).
 
 - **Reliable Lifecycle Management**
