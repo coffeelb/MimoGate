@@ -49,6 +49,9 @@ msgstr "无法读取日志。"
 msgid "Load default config"
 msgstr "加载默认配置"
 
+msgid "Default configuration loaded."
+msgstr "已加载默认配置。"
+
 msgid "Service action failed."
 msgstr "服务操作失败。"
 

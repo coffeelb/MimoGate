@@ -92,7 +92,7 @@ return view.extend({
 				throw new Error(errorText(defaults));
 
 			editor.value = defaults.content;
-			clearOutput();
+			showResult(true, _('Default configuration loaded.'));
 		});
 
 		const check = guarded(async () => {
