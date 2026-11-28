@@ -138,8 +138,10 @@ return view.extend({
 				const finalText = typeof res.content === 'string' ? res.content : text;
 				savedContent = finalText;
 				editor.value = finalText;
-				if (!apply)
+				if (!apply) {
+					showResult(true, _('Contents have been saved.'));
 					return;
+				}
 
 				try {
 					const st = await getStatus();
