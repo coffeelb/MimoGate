@@ -28,14 +28,20 @@ const serviceAction = rpc.declare({
 });
 
 const STATUS_CSS = `
-.mimogate-status-page {
+.mimogate-conn-bar {
 	display: flex;
-	flex-direction: column;
-	gap: 12px;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px 26px;
+	padding: 10px 14px;
+}
+.mimogate-conn-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
 }
 .mimogate-conn-status {
 	display: inline-block;
-	margin-left: .6em;
 	padding: 2px 10px;
 	border-radius: 999px;
 	font-size: 12px;
@@ -48,6 +54,22 @@ const STATUS_CSS = `
 html[data-darkmode="true"] .mimogate-conn-status.success { color: #4ade80; background: rgba(74, 222, 128, .15); }
 html[data-darkmode="true"] .mimogate-conn-status.danger { color: #f87171; background: rgba(248, 113, 113, .15); }
 html[data-darkmode="true"] .mimogate-conn-status.muted { color: #9ca3af; background: rgba(156, 163, 175, .15); }
+.mimogate-log-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 10px;
+}
+.mimogate-log-tabs {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.mimogate-log-error:empty {
+	display: none;
+}
 `;
 
 async function readLogFile(path) {
@@ -69,92 +91,92 @@ return view.extend({
 	handleReset: null,
 
 	render() {
-		const createLogSection = (title, filePath, clearAction) => {
-			const errorEl = E('p', { 'role': 'status' });
-			const textareaEl = E('textarea', {
-				'class': 'cbi-input-textarea',
-				'readonly': 'readonly',
-				'wrap': 'off',
-				'rows': 15,
-				'style': 'width:100%; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; line-height:1.45'
-			});
-
-			const renderText = (text) => {
-				const nextText = text || _('No log entries yet.');
-				if (textareaEl.value === nextText)
-					return;
-
-				const atBottom = textareaEl.scrollHeight - textareaEl.scrollTop - textareaEl.clientHeight < 20;
-				textareaEl.value = nextText;
-				if (atBottom)
-					textareaEl.scrollTop = textareaEl.scrollHeight;
-			};
-
-			let pending;
-			const sync = () => {
-				if (pending)
-					return pending;
-
-				const request = readLogFile(filePath).then(text => {
-					if (pending === request) {
-						dom.content(errorEl, '');
-						renderText(text);
-					}
-				}).catch(error => {
-					if (pending === request) {
-						const message = _('Unable to read the log.');
-						dom.content(errorEl, error.message ? message + ' ' + error.message : message);
-					}
-				}).finally(() => {
-					if (pending === request)
-						pending = null;
-				});
-				pending = request;
-				return request;
-			};
-
-			const clearBtn = E('button', {
-				'type': 'button',
-				'class': 'btn cbi-button cbi-button-negative',
-				'click': ui.createHandlerFn(this, async () => {
-					try {
-						const res = await serviceAction(clearAction);
-						if (!res?.ok)
-							throw new Error([ res?.message ? _(res.message) : _('Service action failed.'), res?.detail ].filter(Boolean).join('\n'));
-						pending = null;
-						await sync();
-					}
-					catch (e) {
-						ui.addNotification(null, E('p', e.message), 'danger');
-					}
-				})
-			}, _('Clear log'));
-
-			const section = E('div', { 'class': 'cbi-map' }, [
-				E('h3', { 'name': 'content', 'style': 'align-items: center; display: flex; gap: .5em' }, [
-					title,
-					clearBtn
-				]),
-				E('div', { 'class': 'cbi-section' }, [
-					errorEl,
-					textareaEl,
-					E('div', { 'style': 'text-align:right' },
-						E('small', {}, _('Refresh every %d seconds.').format(POLL_INTERVAL)))
-				])
-			]);
-
-			return { section, sync };
+		const logSources = {
+			mimogate: { label: _('MimoGate log'), file: MIMOGATE_LOG_FILE, clearAction: 'clear_log' },
+			mihomo: { label: _('Mihomo log'), file: MIHOMO_LOG_FILE, clearAction: 'clear_mihomo_log' }
 		};
 
-		const mimogateLog = createLogSection(_('MimoGate log'), MIMOGATE_LOG_FILE, 'clear_log');
-		const mihomoLog = createLogSection(_('Mihomo log'), MIHOMO_LOG_FILE, 'clear_mihomo_log');
+		let activeKey = 'mimogate';
+		let pending = null;
 
-		const syncAllLogs = () => Promise.all([
-			mimogateLog.sync(),
-			mihomoLog.sync()
-		]);
+		const errorEl = E('p', { 'class': 'mimogate-log-error', 'role': 'status' });
+		const textareaEl = E('textarea', {
+			'class': 'cbi-input-textarea',
+			'readonly': 'readonly',
+			'wrap': 'off',
+			'rows': 22,
+			'style': 'width:100%; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; line-height:1.45'
+		});
 
-		const connRow = (label, site) => {
+		const renderText = (text, forceBottom) => {
+			const nextText = text || _('No log entries yet.');
+			if (!forceBottom && textareaEl.value === nextText)
+				return;
+
+			const atBottom = forceBottom || (textareaEl.scrollHeight - textareaEl.scrollTop - textareaEl.clientHeight < 20);
+			textareaEl.value = nextText;
+			if (atBottom)
+				textareaEl.scrollTop = textareaEl.scrollHeight;
+		};
+
+		const syncActiveLog = (forceBottom = false) => {
+			if (pending && !forceBottom)
+				return pending;
+
+			const request = readLogFile(logSources[activeKey].file).then(text => {
+				if (pending === request) {
+					dom.content(errorEl, '');
+					renderText(text, forceBottom);
+				}
+			}).catch(error => {
+				if (pending === request) {
+					const message = _('Unable to read the log.');
+					textareaEl.value = '';
+					dom.content(errorEl, error.message ? message + ' ' + error.message : message);
+				}
+			}).finally(() => {
+				if (pending === request)
+					pending = null;
+			});
+			pending = request;
+			return request;
+		};
+
+		const tabBtns = Object.entries(logSources).map(([ key, meta ]) => E('button', {
+			'type': 'button',
+			'class': 'btn cbi-button' + (key === activeKey ? ' cbi-button-action' : ''),
+			'data-log-key': key,
+			'click': () => {
+				if (activeKey === key)
+					return;
+				activeKey = key;
+				pending = null;
+				dom.content(errorEl, '');
+				textareaEl.value = '';
+				for (const btn of tabBtns)
+					btn.classList.toggle('cbi-button-action', btn.dataset.logKey === activeKey);
+				syncActiveLog(true);
+			}
+		}, meta.label));
+
+		const clearBtn = E('button', {
+			'type': 'button',
+			'class': 'btn cbi-button cbi-button-negative',
+			'click': ui.createHandlerFn(this, async () => {
+				try {
+					const res = await serviceAction(logSources[activeKey].clearAction);
+					if (!res?.ok)
+						throw new Error([ res?.message ? _(res.message) : _('Service action failed.'), res?.detail ].filter(Boolean).join('\n'));
+					pending = null;
+					await syncActiveLog(true);
+				}
+				catch (e) {
+					ui.addNotification(null, E('p', e.message), 'danger');
+				}
+			})
+		}, _('Clear log'));
+
+		const connItem = (label, site) => {
 			const statusEl = E('span', { 'class': 'mimogate-conn-status muted' }, _('unchecked'));
 			const btn = E('button', {
 				'type': 'button',
@@ -180,28 +202,36 @@ return view.extend({
 				})
 			}, _('Check', 'Connection check'));
 
-			return E('div', { 'class': 'cbi-value' }, [
-				E('label', { 'class': 'cbi-value-title' }, label),
-				E('div', { 'class': 'cbi-value-field' }, [ btn, statusEl ])
+			return E('div', { 'class': 'mimogate-conn-item' }, [
+				E('span', {}, label),
+				btn,
+				statusEl
 			]);
 		};
 
-		window.setTimeout(() => syncAllLogs(), 0);
-		poll.add(() => document.hidden ? Promise.resolve() : syncAllLogs(), POLL_INTERVAL);
+		window.setTimeout(() => syncActiveLog(true), 0);
+		poll.add(() => document.hidden ? Promise.resolve() : syncActiveLog(false), POLL_INTERVAL);
 
-		return E('div', { 'class': 'cbi-map mimogate-status-page' }, [
+		return E('div', { 'class': 'cbi-map' }, [
 			E('style', [ STATUS_CSS ]),
 			E('div', { 'class': 'cbi-section' }, [
-				E('h3', _('Connection check')),
-				E('div', { 'class': 'cbi-section-node' }, [
-					connRow(_('Baidu'), 'baidu'),
-					connRow(_('Google'), 'google')
+				E('h3', _('Connectivity')),
+				E('div', { 'class': 'cbi-section-node mimogate-conn-bar' }, [
+					connItem(_('Baidu'), 'baidu'),
+					connItem(_('Google'), 'google')
 				])
 			]),
 			E('div', { 'class': 'cbi-section' }, [
-				E('div', { 'class': 'cbi-section-node' }, [
-					mimogateLog.section,
-					mihomoLog.section
+				E('h3', _('MimoGate Logs')),
+				E('div', { 'class': 'cbi-section-node', 'style': 'padding: 1em' }, [
+					E('div', { 'class': 'mimogate-log-toolbar' }, [
+						E('div', { 'class': 'mimogate-log-tabs' }, tabBtns),
+						clearBtn
+					]),
+					errorEl,
+					textareaEl,
+					E('div', { 'style': 'margin-top: 6px; text-align: right' },
+						E('small', {}, _('Refresh every %d seconds.').format(POLL_INTERVAL)))
 				])
 			])
 		]);

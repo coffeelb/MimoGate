@@ -21,7 +21,7 @@ Instead of bloated form-based node and rule generators, it focuses on **service 
   - **Smart Local & Forwarded Traffic Bypass**: Automatically bypasses private/reserved addresses and inbound port forwards (DNAT). Supports intercepting router-originated traffic while exempting DHCPv4/DHCPv6 and allowing bypass via packet mark `0x20000000` (e.g., for router-based VPN clients like WireGuard).
 
 - **LAN Access Control (ACL) & Direct DNS Bypass**
-  - Supports selecting specific LAN/VLAN **Listen interfaces** (defaults to `lan` when left empty), and in `fake-ip` mode automatically bypasses router DNS for unselected downstream VLANs so they receive real IPs.
+  - Supports selecting specific LAN/VLAN **Listen interfaces** (pre-selects the `lan` device by default, with at least one interface required; you can switch to or add other LAN/VLAN interfaces), and in `fake-ip` mode automatically bypasses router DNS for unselected downstream VLANs so they receive real IPs.
   - Supports three modes: **All LAN devices**, **Bypass listed devices**, and **Proxy listed devices only**.
   - Matches devices by **MAC, IPv4, IPv6, or CIDR**, with a built-in online device picker that filters out router local addresses (selecting MAC addresses is recommended to cover both IPv4 and IPv6).
   - For bypassed LAN devices, automatically DNATs their router-bound IPv4 DNS queries (port 53) to a direct DNS server (`223.5.5.5` by default; customizable via UCI `mimogate.config.direct_dns`) and rejects router-bound IPv6 DNS queries so dual-stack clients immediately fall back to direct IPv4 DNS without hitting Mihomo DNS (note: local `.lan` hostnames are not resolved by `dnsmasq` for bypassed devices).
@@ -34,7 +34,7 @@ Instead of bloated form-based node and rule generators, it focuses on **service 
   - Managed solely through the Settings page without touching `config.yaml`.
 
 - **Clean & Intuitive LuCI Experience (Inspired by HomeProxy)**
-  - Organized into three pages: **Settings** (live status bar + General / Access control tabs), **Configuration management** (raw YAML editor + validation + Load default config), and **Service status** (Baidu/Google connection check + separate auto-refreshing **MimoGate log** and **Mihomo log** viewers).
+  - Organized into three pages: **Settings** (Settings / Access control tabs with live version and running status in the subtitle), **Config** (raw YAML editor + validation + Load default config), and **Logs** (Baidu/Google connectivity check + tabbed **MimoGate log** and **Mihomo log** viewer).
   - Supports English and Simplified Chinese (`zh_Hans`) as well as OpenWrt dark mode. All RPC methods enforce an OpenWrt `root` administrator session.
 
 ---
@@ -75,10 +75,10 @@ make package/mimogate/luci-app-mimogate/compile V=s
 
 ## Quick Start
 
-1. Log in to OpenWrt LuCI and navigate to **Services -> MimoGate -> Configuration management**.
+1. Log in to OpenWrt LuCI and navigate to **Services -> MimoGate -> Config**.
 2. Click **Load default config** or paste your own Mihomo YAML configuration (must be a single YAML document with a top-level block `tun:` section and DNS listening on `127.0.0.1:1053`), update your proxy nodes, then click **Check** and **Save**.
 3. Go to the **Settings** page, check **Proxy switch**, and click **Save & Apply** to start the service.
-4. Use the **Service status** page to run connection checks and monitor **MimoGate log** and **Mihomo log** in real time.
+4. Use the **Logs** page to run connectivity checks and monitor **MimoGate log** and **Mihomo log** in real time.
 
 ---
 

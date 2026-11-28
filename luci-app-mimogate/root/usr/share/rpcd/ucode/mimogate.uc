@@ -221,7 +221,7 @@ function serviceAction(args, reply) {
 	if (!fs.access(core, 'x'))
 		return reply(failure('Mihomo core was not found.'));
 	if (!fs.stat(config)?.size)
-		return reply(failure('Save a YAML configuration on the Configuration page first.'));
+		return reply(failure('Save a YAML configuration on the Config page first.'));
 
 	run();
 }

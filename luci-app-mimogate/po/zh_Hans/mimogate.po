@@ -19,9 +19,6 @@ msgstr "直接编辑 Mihomo 的 YAML 配置。保存前会通过“mihomo -t”�
 msgid "No log entries yet."
 msgstr "暂无日志。"
 
-msgid "Not found"
-msgstr "未找到"
-
 msgid "Not saved: the configuration is invalid."
 msgstr "配置无效，未保存。"
 
@@ -39,9 +36,6 @@ msgstr "未运行"
 
 msgid "Unknown"
 msgstr "状态未知"
-
-msgid "Mihomo version"
-msgstr "Mihomo 版本"
 
 msgid "Unable to read the log."
 msgstr "无法读取日志。"
@@ -130,8 +124,8 @@ msgstr "无法更新中国大陆 IP 列表。"
 msgid "Invalid service action."
 msgstr "无效的服务操作。"
 
-msgid "Save a YAML configuration on the Configuration page first."
-msgstr "请先在配置文件页保存 YAML。"
+msgid "Save a YAML configuration on the Config page first."
+msgstr "请先在配置页保存 YAML。"
 
 msgid "Access control"
 msgstr "访问控制"
@@ -151,29 +145,20 @@ msgstr "按 MAC、IPv4、IPv6 或 CIDR 控制局域网设备是否走 Mihomo（�
 msgid "Settings"
 msgstr "设置"
 
-msgid "Configuration management"
-msgstr "配置管理"
+msgid "Config"
+msgstr "配置"
 
-msgid "MimoGate configuration management"
-msgstr "MimoGate 配置管理"
+msgid "Configuration editor"
+msgstr "配置编辑"
 
-msgid "Service status"
-msgstr "服务状态"
-
-msgid "General"
-msgstr "常规设置"
-
-msgid "Running status"
-msgstr "运行状态"
+msgid "Logs"
+msgstr "日志"
 
 msgid "Listen interfaces"
 msgstr "监听接口"
 
-msgid "Select LAN/VLAN interfaces to proxy. Leave empty to use the default lan interface."
-msgstr "选择需要代理的 LAN/VLAN 接口。留空默认仅代理 lan 接口。"
-
-msgid "Default (lan)"
-msgstr "默认 (lan)"
+msgid "Select LAN/VLAN interfaces to proxy."
+msgstr "选择需要代理的 LAN/VLAN 接口。"
 
 msgid "Access control mode"
 msgstr "访问控制模式"
@@ -187,8 +172,8 @@ msgstr "IPv4 地址"
 msgid "IPv6 addresses"
 msgstr "IPv6 地址"
 
-msgid "Connection check"
-msgstr "连通性测试"
+msgid "Connectivity"
+msgstr "网络检测"
 
 msgctxt "Connection check"
 msgid "Check"
@@ -208,6 +193,9 @@ msgstr "通过"
 
 msgid "failed"
 msgstr "失败"
+
+msgid "MimoGate Logs"
+msgstr "MimoGate 日志"
 
 msgid "MimoGate log"
 msgstr "MimoGate 日志"
@@ -230,15 +218,6 @@ msgstr "启用 MimoGate 并随开机自启。"
 msgid "Reset"
 msgstr "复位"
 
-msgid "Panel"
-msgstr "面板"
-
-msgid "Enabled"
-msgstr "已启用"
-
-msgid "Disabled"
-msgstr "已禁用"
-
 msgid "Enable panel"
 msgstr "启用面板"
 
@@ -258,7 +237,7 @@ msgid "Open Panel"
 msgstr "打开面板"
 
 msgid "Open Zashboard"
-msgstr "打开 Zashboard 控制台"
+msgstr "打开 Zashboard"
 
 msgid "Reject QUIC"
 msgstr "拒绝 QUIC"

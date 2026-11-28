@@ -11,12 +11,12 @@
     "action": { "type": "view", "path": "mimogate/setting" }
   },
   "admin/services/mimogate/config": {
-    "title": "Configuration management",
+    "title": "Config",
     "order": 15,
     "action": { "type": "view", "path": "mimogate/config" }
   },
   "admin/services/mimogate/status": {
-    "title": "Service status",
+    "title": "Logs",
     "order": 20,
     "action": { "type": "view", "path": "mimogate/status" }
   }

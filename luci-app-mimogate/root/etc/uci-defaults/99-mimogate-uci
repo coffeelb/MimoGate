@@ -11,6 +11,8 @@ EOF
 
 if /etc/init.d/mimogate enabled 2>/dev/null; then
 	uci -q set mimogate.config.enabled='1'
+else
+	uci -q set mimogate.config.enabled='0'
 fi
 
 if [ -f "$WORKDIR/proxy-ports" ]; then
